@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 )
@@ -12,19 +13,7 @@ var subcomando map[int]string
 
 func main() {
 
-	fmt.Print("Introduzca un comando----:: ")
-	reader := bufio.NewReader(os.Stdin)
-	entrada, _ := reader.ReadString('\n')
-	eleccion := strings.TrimRight(entrada, "\r\n")
-	Analizador(eleccion + "$$")
-
-	for eleccion != "exit" {
-		fmt.Print("Introduzca un comando----:: ")
-		reader = bufio.NewReader(os.Stdin)
-		entrada, _ = reader.ReadString('\n')
-		eleccion = strings.TrimRight(entrada, "\r\n")
-		Analizador(eleccion + "$$")
-	}
+	Analizador("exec -path->/home/josselyn/Documentos/Universidad/Archivos/prueba1.mia" + "$$")
 
 }
 func asignacionValores() {
@@ -61,39 +50,11 @@ func asignacionValores() {
 
 }
 
-func asignacionSubcomandos() {
-	subcomando = make(map[int]string)
-	subcomando[0] = "path"
-	subcomando[1] = "size"
-	subcomando[2] = "name"
-	subcomando[3] = "unit"
-	subcomando[4] = "type"
-	subcomando[5] = "fit"
-	subcomando[6] = "delete"
-	subcomando[7] = "add"
-	subcomando[8] = "id"
-	subcomando[9] = "usr"
-	subcomando[10] = "pwd"
-	subcomando[11] = "grp"
-	subcomando[12] = "ugo"
-	subcomando[13] = "r"
-	subcomando[14] = "p"
-	subcomando[15] = "cont"
-	subcomando[16] = "file"
-	subcomando[17] = "rf"
-	subcomando[18] = "dest"
-	subcomando[19] = "route"
-}
-
 func Analizador(cadena string) {
-	asignacionValores()
-	asignacionSubcomandos()
 	estado := 0
 	cadenita := ""
 	lineaComando := ""
 	escape := false
-	ruta := false
-	extension := ""
 	for i := 0; i < len(cadena); i++ {
 		caracter := string(rune(cadena[i]))
 
@@ -109,45 +70,66 @@ func Analizador(cadena string) {
 				cadenita += caracter
 			} else if cadena[i] == 47 {
 				cadenita += caracter
-				estado = 5
+				estado = 9
 			} else if cadena[i] == 45 {
 				estado = 8
+				lineaComando += caracter
+			} else if cadena[i] == 46 {
+				estado = 0
+				lineaComando += caracter
+			} else if cadena[i] == 58 {
+				estado = 0
 				lineaComando += caracter
 			} else if cadena[i] == 92 {
 				estado = 4
 			} else if cadena[i] == 34 {
 				estado = 5
-				ruta = true
-			} else if rune(cadena[i]) == '\n' || escape == false {
-				AnalizarLineaComando(lineaComando)
-				lineaComando = ""
-			} else if rune(cadena[i]) == '\n' || escape == true {
-				estado = 0
+
 			} else if cadena[i] == 35 {
 				estado = 7
 				cadenita += caracter
+				if lineaComando != "" {
+					AnalizarLineaComando(lineaComando)
+					lineaComando = ""
+				}
 			} else if caracter == "$" {
-				AnalizarLineaComando(lineaComando)
-				lineaComando = ""
+				if lineaComando != "" {
+					AnalizarLineaComando(lineaComando)
+					lineaComando = ""
+				}
+
+			} else if caracter == "\n" || escape == false {
+				if lineaComando != "" {
+					AnalizarLineaComando(lineaComando)
+					lineaComando = ""
+				}
+			} else if caracter == "\n" || escape == true {
+				estado = 0
 			}
 
 			break
 		case 1:
-			if cadena[i] >= 65 && cadena[i] <= 90 || cadena[i] >= 97 && cadena[i] <= 122 {
+			if cadena[i] >= 65 && cadena[i] <= 90 || cadena[i] >= 97 && cadena[i] <= 122 ||
+				cadena[i] >= 48 && cadena[i] <= 57 || cadena[i] == 95 || cadena[i] == 46 {
 				cadenita += caracter
 				estado = 1
 			} else if cadena[i] == 47 {
 				cadenita += caracter
 				estado = 5
 			} else if cadena[i] == 32 {
-				for j := range Comandos {
-					if Comandos[j] == strings.ToLower(cadenita) {
-						lineaComando += cadenita + " "
-						cadenita = ""
-						estado = 0
-						break
-					}
-				}
+				lineaComando += cadenita + " "
+				cadenita = ""
+				estado = 0
+			} else if len(cadena) == (i + 2) {
+				lineaComando += cadenita + " "
+				cadenita = ""
+				estado = 0
+			} else if caracter == "\n" {
+				lineaComando += cadenita
+				cadenita = ""
+				estado = 0
+				AnalizarLineaComando(lineaComando)
+				lineaComando = ""
 			} else {
 				estado = 0
 			}
@@ -164,8 +146,16 @@ func Analizador(cadena string) {
 				estado = 5
 			} else if cadena[i] == 32 || cadena[i] == '\t' {
 				estado = 0
+				lineaComando += cadenita + " "
+				cadenita = ""
+			} else if len(cadena) == (i + 2) {
 				lineaComando += cadenita
 				cadenita = ""
+				estado = 0
+			} else if caracter == "\n" {
+				lineaComando += cadenita
+				cadenita = ""
+				estado = 0
 			} else {
 				estado = 0
 			}
@@ -178,7 +168,7 @@ func Analizador(cadena string) {
 			} else if cadena[i] == 47 {
 				cadenita += caracter
 				estado = 5
-			} else if cadena[i] == 32 || cadena[i] == '\t' {
+			} else if cadena[i] == 32 || cadena[i] == '\t' || caracter == "\n" {
 				estado = 0
 				lineaComando += cadenita
 				cadenita = ""
@@ -191,6 +181,9 @@ func Analizador(cadena string) {
 			if cadena[i] == 42 {
 				escape = true
 				estado = 0
+				if string(rune(cadena[i+1])) == "\n" {
+					i++
+				}
 			}
 			break
 		case 5:
@@ -200,78 +193,130 @@ func Analizador(cadena string) {
 			} else if cadena[i] == 32 {
 				cadenita += "@"
 
-			} else if cadena[i] == 46 {
-				estado = 6
-				cadenita += caracter
-			} else if rune(cadena[i]) != '\n' || cadena[i] != 46 {
+			} else if cadena[i] == 34 {
+				estado = 0
+				lineaComando += cadenita + " "
+				cadenita = ""
+			} else if caracter != "\n" && cadena[i] != 92 && (len(cadena) != (i + 2)) {
 				estado = 5
 				cadenita += caracter
-			}
-			break
-		case 6:
-
-			if cadena[i] >= 65 && cadena[i] <= 90 || cadena[i] >= 97 && cadena[i] <= 122 {
-				estado = 6
-				extension += caracter
-				println(extension)
-			} else if cadena[i] == 34 && ruta == true {
-				if strings.ToLower(extension) == "mia" {
-					cadenita += extension
-					estado = 0
-					lineaComando += cadenita
-					cadenita = ""
-					extension = ""
+			} else if cadena[i] == 92 {
+				i++
+				if cadena[i] == 42 {
+					i++
 				}
-			} else if cadena[i] != 34 && ruta == false {
-				if strings.ToLower(extension) == "mia" {
-					println("paso por extension")
-					cadenita += extension
-					estado = 0
-					lineaComando += cadenita
-					cadenita = ""
-					extension = ""
-				}
-			} else {
-				estado = 0
 			}
 			break
 		case 7:
 
-			if rune(cadena[i]) != '\n' {
-				cadenita = caracter
+			if caracter != "\n" && (len(cadena) != (i + 2)) {
+				cadenita += caracter
 				estado = 7
 			} else {
 				fmt.Println(cadenita)
 				cadenita = ""
+				estado = 0
 			}
 			break
 		case 8:
 			if cadena[i] >= 65 && cadena[i] <= 90 || cadena[i] >= 97 && cadena[i] <= 122 {
 				cadenita += caracter
 				estado = 8
-			} else if cadena[i] >= 48 || cadena[i] <= 57 {
+			} else if cadena[i] >= 48 && cadena[i] <= 57 {
 				cadenita += caracter
 				estado = 3
+			} else if cadena[i] == 92 {
+				lineaComando += cadenita
+				cadenita = ""
+				estado = 0
+				i--
 			} else if cadena[i] == 45 {
-				for j := range subcomando {
-					if subcomando[j] == strings.ToLower(cadenita) {
-						cadenita += string(rune(cadena[i]))
-						i++
-						if cadena[i] == 62 {
-							cadenita += string(rune(cadena[i]))
-							lineaComando += cadenita
-							cadenita = ""
-							estado = 0
-						}
-						break
-					}
+				cadenita += string(rune(cadena[i]))
+				i++
+				if cadena[i] == 62 {
+					cadenita += string(rune(cadena[i]))
+					lineaComando += cadenita
+					cadenita = ""
+					estado = 0
 				}
-
+			}
+			break
+		case 9:
+			if cadena[i] == 92 {
+				i--
+				estado = 0
+			} else if cadena[i] != 32 && (len(cadena) != (i + 2)) {
+				cadenita += caracter
+			} else {
+				lineaComando += cadenita + " "
+				cadenita = ""
+				estado = 0
 			}
 			break
 		}
 	}
 }
+func CargaMasiva(direccion string) {
+	file, err := os.Open(direccion)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	texto := ""
+	for scanner.Scan() {
+		texto += scanner.Text() + "\n"
+		//	fmt.Println(scanner.Bytes())
+	}
+	Analizador(texto)
+}
+func direccion(cadena string) string {
+	cad := strings.Split(cadena, "->")
+	direccion := ""
+	if cad[0] == "-path" {
+		if strings.Contains(cad[1], "@") {
+			for h := 0; h < len(cad[1]); h++ {
+				if cad[1][h] == 64 {
+					direccion += " "
+				} else {
+					direccion += string(rune(cad[1][h]))
+				}
+			}
+			return direccion
+		} else {
+			return cad[1]
+		}
+	} else {
+		direccion = "Comando incorrecto, se esperaba -PATH"
+	}
+	return direccion
+}
+func ValidarRuta(ruta string) bool {
+	if _, err := os.Stat(ruta); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("La ruta o archivo no existe")
+			return true
+		} else {
+			fmt.Println("Error al verificar ruta")
+			return true
+		}
+
+	}
+	return false
+}
 func AnalizarLineaComando(cadena string) {
 	fmt.Println(cadena)
+	arreglo := strings.Split(cadena, " ")
+	if strings.ToLower(arreglo[0]) == "exec" {
+
+		direccion := direccion(arreglo[1])
+		if !ValidarRuta(direccion) {
+			CargaMasiva(direccion)
+		}
+
+	}
+
+	/*	for i := 0; i < len(arreglo); i++ {
+
+		}*/
 }
