@@ -10,11 +10,36 @@ import (
 
 var Comandos map[int]string
 var subcomando map[int]string
+var colorPurple string
+var colorRed string
+var colorCyan string
+var colorBlanco string
+var colorGreen string
+var colorBlue string
 
+func colorcitos() {
+	colorRed = "\033[31m"
+	colorGreen = "\033[32m"
+	//	colorYellow := "\033[33m"
+	colorBlue = "\033[34m"
+	colorPurple = "\033[35m"
+	colorCyan = "\033[36m"
+	colorBlanco = "\033[37m"
+}
 func main() {
+	fmt.Print(colorBlanco, "Introduzca un comando----:: ")
+	reader := bufio.NewReader(os.Stdin)
+	entrada, _ := reader.ReadString('\n')
+	eleccion := strings.TrimRight(entrada, "\r\n")
+	Analizador(eleccion + "$$")
 
-	Analizador("exec -path->/home/josselyn/Documentos/Universidad/Archivos/prueba1.mia" + "$$")
-
+	for eleccion != "exit" {
+		fmt.Print(colorBlanco, "Introduzca un comando----:: ")
+		reader = bufio.NewReader(os.Stdin)
+		entrada, _ = reader.ReadString('\n')
+		eleccion = strings.TrimRight(entrada, "\r\n")
+		Analizador(eleccion + "$$")
+	}
 }
 func asignacionValores() {
 	Comandos = make(map[int]string)
@@ -51,6 +76,7 @@ func asignacionValores() {
 }
 
 func Analizador(cadena string) {
+	colorcitos()
 	estado := 0
 	cadenita := ""
 	lineaComando := ""
@@ -105,6 +131,8 @@ func Analizador(cadena string) {
 				}
 			} else if caracter == "\n" || escape == true {
 				estado = 0
+			} else {
+				fmt.Println(colorRed, "Caracter no reconocido "+caracter)
 			}
 
 			break
@@ -213,7 +241,7 @@ func Analizador(cadena string) {
 				cadenita += caracter
 				estado = 7
 			} else {
-				fmt.Println(cadenita)
+				fmt.Println(string(colorPurple), cadenita)
 				cadenita = ""
 				estado = 0
 			}
@@ -260,6 +288,7 @@ func CargaMasiva(direccion string) {
 	file, err := os.Open(direccion)
 	if err != nil {
 		log.Fatal(err)
+
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
@@ -287,17 +316,17 @@ func direccion(cadena string) string {
 			return cad[1]
 		}
 	} else {
-		direccion = "Comando incorrecto, se esperaba -PATH"
+		fmt.Println(colorRed, "Comando incorrecto, se esperaba -PATH")
 	}
-	return direccion
+	return ""
 }
 func ValidarRuta(ruta string) bool {
 	if _, err := os.Stat(ruta); err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("La ruta o archivo no existe")
+			fmt.Println(colorRed, "La ruta o archivo no existe")
 			return true
 		} else {
-			fmt.Println("Error al verificar ruta")
+			fmt.Println(colorRed, "Error al verificar ruta")
 			return true
 		}
 
@@ -305,10 +334,9 @@ func ValidarRuta(ruta string) bool {
 	return false
 }
 func AnalizarLineaComando(cadena string) {
-	fmt.Println(cadena)
 	arreglo := strings.Split(cadena, " ")
 	if strings.ToLower(arreglo[0]) == "exec" {
-
+		fmt.Println(colorBlue, "analizando ruta...")
 		direccion := direccion(arreglo[1])
 		if !ValidarRuta(direccion) {
 			CargaMasiva(direccion)
