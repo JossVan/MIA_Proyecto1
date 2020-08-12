@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
-var Comandos map[int]string
 var subcomando map[int]string
+var mkdiskcomands map[int]string
 var colorPurple string
 var colorRed string
 var colorCyan string
 var colorBlanco string
 var colorGreen string
 var colorBlue string
+var disk comMKDISK
 
 func colorcitos() {
 	colorRed = "\033[31m"
@@ -25,6 +27,13 @@ func colorcitos() {
 	colorPurple = "\033[35m"
 	colorCyan = "\033[36m"
 	colorBlanco = "\033[37m"
+}
+func mkdiskcomand() {
+	mkdiskcomands = make(map[int]string)
+	mkdiskcomands[0] = "-size"
+	mkdiskcomands[1] = "-path"
+	mkdiskcomands[2] = "-name"
+	mkdiskcomands[3] = "-unit"
 }
 func main() {
 	fmt.Print(colorBlanco, "Introduzca un comando----:: ")
@@ -40,39 +49,6 @@ func main() {
 		eleccion = strings.TrimRight(entrada, "\r\n")
 		Analizador(eleccion + "$$")
 	}
-}
-func asignacionValores() {
-	Comandos = make(map[int]string)
-	Comandos[0] = "exec"
-	Comandos[1] = "pause"
-	Comandos[2] = "mkdisk"
-	Comandos[3] = "rmdisk"
-	Comandos[4] = "fdisk"
-	Comandos[5] = "mount"
-	Comandos[6] = "unmount"
-	Comandos[7] = "mkfs"
-	Comandos[8] = "login"
-	Comandos[9] = "logout"
-	Comandos[10] = "mkgrp"
-	Comandos[11] = "rmgrp"
-	Comandos[12] = "mkusr"
-	Comandos[13] = "rmusr"
-	Comandos[14] = "chmod"
-	Comandos[15] = "mkfile"
-	Comandos[16] = "cat"
-	Comandos[17] = "rm"
-	Comandos[18] = "edit"
-	Comandos[19] = "ren"
-	Comandos[20] = "mkdir"
-	Comandos[21] = "cp"
-	Comandos[22] = "mv"
-	Comandos[23] = "find"
-	Comandos[24] = "chown"
-	Comandos[26] = "chgrp"
-	Comandos[27] = "recovery"
-	Comandos[28] = "loss"
-	Comandos[29] = "rep"
-
 }
 
 func Analizador(cadena string) {
@@ -110,7 +86,6 @@ func Analizador(cadena string) {
 				estado = 4
 			} else if cadena[i] == 34 {
 				estado = 5
-
 			} else if cadena[i] == 35 {
 				estado = 7
 				cadenita += caracter
@@ -335,16 +310,118 @@ func ValidarRuta(ruta string) bool {
 }
 func AnalizarLineaComando(cadena string) {
 	arreglo := strings.Split(cadena, " ")
-	if strings.ToLower(arreglo[0]) == "exec" {
+	switch strings.ToLower(arreglo[0]) {
+	case "exec":
 		fmt.Println(colorBlue, "analizando ruta...")
 		direccion := direccion(arreglo[1])
 		if !ValidarRuta(direccion) {
 			CargaMasiva(direccion)
 		}
+		break
+	case "mkdisk":
 
+		break
 	}
+}
 
-	/*	for i := 0; i < len(arreglo); i++ {
+func size(num string) int64 {
+	numero, err := strconv.Atoi(num)
+	if err != nil {
+		fmt.Println(colorRed, "Tamaño incorrecto:", err)
+	} else if numero >= 0 {
+		return int64(numero)
+	}
+	return -1
+}
 
-		}*/
+type comMKDISK struct {
+	name string
+	tam  int64
+	unit int
+	ext  string
+}
+
+func MKDSIK(cadena []string) {
+	aux := 0
+	err := false
+	for i := 1; i < len(cadena); i++ {
+		com := strings.Split(cadena[i], "->")
+		if com[0] == mkdiskcomands[0] {
+			disk.tam = size(com[1])
+			if disk.tam != -1 {
+				aux++
+			} else {
+				err = true
+			}
+		} else if com[0] == mkdiskcomands[1] {
+			if strings.Contains(com[1], "@") {
+				strings.ReplaceAll(com[1], "@", " ")
+			}
+			if AnalizarRuta(com[1]) {
+				aux++
+				disk.ext = com[1]
+			} else {
+				err = true
+			}
+		} else if com[0] == mkdiskcomands[2] {
+			if VerificacionNombre(com[1]) {
+				aux++
+				disk.name = com[1]
+			} else {
+				err = true
+			}
+
+		} else if com[0] == mkdiskcomands[3] {
+			disk.unit = UNIT(com[1])
+			if disk.unit != -1 {
+				aux++
+			} else {
+				err = true
+			}
+		}
+	}
+	if err == true {
+		fmt.Println(colorRed, "Error en las características del disco")
+	} else {
+		if aux >= 3 {
+
+		} else {
+			fmt.Println(colorRed, "Falta un subcomando requerido")
+		}
+	}
+}
+func AnalizarRuta(direccion string) bool {
+
+	_, error := os.Stat(direccion)
+	if os.IsNotExist(error) {
+		error = os.Mkdir(direccion, 0777)
+		if error != nil {
+			fmt.Println(colorRed, "Se ha producido un error al intentar acceder a la ruta")
+			return false
+		}
+	}
+	return true
+}
+
+func VerificacionNombre(nombre string) bool {
+	for i := 0; i < len(nombre); i++ {
+		if !(nombre[i] >= 48 && nombre[i] <= 57 || nombre[i] >= 65 && nombre[i] <= 90 ||
+			nombre[i] >= 97 && nombre[i] <= 122 || nombre[i] == 95 || nombre[i] == 46) {
+			return false
+		}
+	}
+	extension := strings.Split(nombre, ".")
+	if strings.ToLower(extension[1]) != "dsk" {
+		return false
+	}
+	return true
+}
+func UNIT(unidad string) int {
+	if unidad == "m" {
+		return 1024 * 1024
+	} else if unidad == "k" {
+		return 1024
+	} else {
+		return -1
+	}
 }
