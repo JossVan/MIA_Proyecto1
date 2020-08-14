@@ -2,11 +2,15 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"strings"
+	"time"
+	"unsafe"
 )
 
 var subcomando map[int]string
@@ -27,13 +31,6 @@ func colorcitos() {
 	colorPurple = "\033[35m"
 	colorCyan = "\033[36m"
 	colorBlanco = "\033[37m"
-}
-func mkdiskcomand() {
-	mkdiskcomands = make(map[int]string)
-	mkdiskcomands[0] = "-size"
-	mkdiskcomands[1] = "-path"
-	mkdiskcomands[2] = "-name"
-	mkdiskcomands[3] = "-unit"
 }
 func main() {
 	fmt.Print(colorBlanco, "Introduzca un comando----:: ")
@@ -319,7 +316,12 @@ func AnalizarLineaComando(cadena string) {
 		}
 		break
 	case "mkdisk":
-
+		MKDSIK(arreglo)
+		break
+	case "pause":
+		fmt.Println("Precione Enter para continuar")
+		var input string
+		fmt.Scanln(&input)
 		break
 	}
 }
@@ -337,7 +339,7 @@ func size(num string) int64 {
 type comMKDISK struct {
 	name string
 	tam  int64
-	unit int
+	unit byte
 	ext  string
 }
 
@@ -346,14 +348,14 @@ func MKDSIK(cadena []string) {
 	err := false
 	for i := 1; i < len(cadena); i++ {
 		com := strings.Split(cadena[i], "->")
-		if com[0] == mkdiskcomands[0] {
+		if strings.ToLower(com[0]) == "-size" {
 			disk.tam = size(com[1])
 			if disk.tam != -1 {
 				aux++
 			} else {
 				err = true
 			}
-		} else if com[0] == mkdiskcomands[1] {
+		} else if strings.ToLower(com[0]) == "-path" {
 			if strings.Contains(com[1], "@") {
 				strings.ReplaceAll(com[1], "@", " ")
 			}
@@ -363,7 +365,7 @@ func MKDSIK(cadena []string) {
 			} else {
 				err = true
 			}
-		} else if com[0] == mkdiskcomands[2] {
+		} else if strings.ToLower(com[0]) == "-name" {
 			if VerificacionNombre(com[1]) {
 				aux++
 				disk.name = com[1]
@@ -371,9 +373,9 @@ func MKDSIK(cadena []string) {
 				err = true
 			}
 
-		} else if com[0] == mkdiskcomands[3] {
+		} else if strings.ToLower(com[0]) == "-unit" {
 			disk.unit = UNIT(com[1])
-			if disk.unit != -1 {
+			if disk.unit != 'E' {
 				aux++
 			} else {
 				err = true
@@ -384,7 +386,7 @@ func MKDSIK(cadena []string) {
 		fmt.Println(colorRed, "Error en las características del disco")
 	} else {
 		if aux >= 3 {
-
+			CrearDisco(disk.name, disk.tam, disk.unit, disk.ext)
 		} else {
 			fmt.Println(colorRed, "Falta un subcomando requerido")
 		}
@@ -416,12 +418,89 @@ func VerificacionNombre(nombre string) bool {
 	}
 	return true
 }
-func UNIT(unidad string) int {
+func UNIT(unidad string) byte {
 	if unidad == "m" {
-		return 1024 * 1024
+		return 'm'
 	} else if unidad == "k" {
-		return 1024
+		return 'k'
 	} else {
-		return -1
+		return 'E'
 	}
+
+}
+
+func CrearDisco(nombre string, tam int64, unidad byte, ruta string) {
+
+	file, err := os.Create(ruta + "/" + nombre)
+	defer file.Close()
+	if err != nil {
+		fmt.Println(colorRed, err)
+		return
+	}
+
+	size := 0
+	if unidad == 'k' {
+		size = 1024 * int(tam)
+	} else {
+		size = 1024 * 1024 * int(tam)
+	}
+	if size != 0 {
+		var otro int8 = 0
+
+		s := &otro
+		size = size - 1
+		fmt.Println(unsafe.Sizeof(otro))
+
+		var binario bytes.Buffer
+		binary.Write(&binario, binary.BigEndian, s)
+		escribirBytes(file, binario.Bytes())
+
+		file.Seek(int64(size), 0)
+		var binario2 bytes.Buffer
+		binary.Write(&binario2, binary.BigEndian, s)
+		escribirBytes(file, binario2.Bytes())
+
+		file.Seek(0, 0)
+		CrearMBR(int64(size), file)
+	}
+}
+func readNextBytes(file *os.File, number int) []byte {
+	bytes := make([]byte, number)
+
+	_, err := file.Read(bytes)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return bytes
+}
+
+func escribirBytes(file *os.File, bytes []byte) {
+	_, err := file.Write(bytes)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+type MBR struct {
+	mbr_tam            int64
+	mbr_fecha_creacion [10]byte
+	mbr_disk_id        int8
+	part               particion
+}
+
+type particion struct {
+}
+
+func CrearMBR(mbr_tam int64, file *os.File) {
+	mbr := MBR{}
+	mbr.mbr_tam = mbr_tam
+	mbr.mbr_disk_id = 1
+	t := time.Now()
+	fecha := string(t.Day()) + "-" + string(t.Month()) + "-" + string(t.Year())
+	copy(mbr.mbr_fecha_creacion[:], fecha)
+	var b2 bytes.Buffer
+	binary.Write(&b2, binary.BigEndian, &mbr)
+	escribirBytes(file, b2.Bytes())
 }
