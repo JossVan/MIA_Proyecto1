@@ -22,6 +22,7 @@ var colorBlanco string
 var colorGreen string
 var colorBlue string
 var disk comMKDISK
+var rutita string
 
 func colorcitos() {
 	colorRed = "\033[31m"
@@ -48,6 +49,7 @@ func main() {
 	}
 }
 
+//Analizador funcion que analiza todo el texto
 func Analizador(cadena string) {
 	colorcitos()
 	estado := 0
@@ -256,6 +258,8 @@ func Analizador(cadena string) {
 		}
 	}
 }
+
+//CargaMasiva función para cargar datos
 func CargaMasiva(direccion string) {
 	file, err := os.Open(direccion)
 	if err != nil {
@@ -284,27 +288,27 @@ func direccion(cadena string) string {
 				}
 			}
 			return direccion
-		} else {
-			return cad[1]
 		}
-	} else {
-		fmt.Println(colorRed, "Comando incorrecto, se esperaba -PATH")
+		return cad[1]
 	}
+	fmt.Println(colorRed, "Comando incorrecto, se esperaba -PATH")
 	return ""
 }
+
+//ValidarRuta valida si la dirección es correcta
 func ValidarRuta(ruta string) bool {
 	if _, err := os.Stat(ruta); err != nil {
 		if os.IsNotExist(err) {
 			fmt.Println(colorRed, "La ruta o archivo no existe")
 			return true
-		} else {
-			fmt.Println(colorRed, "Error al verificar ruta")
-			return true
 		}
-
+		fmt.Println(colorRed, "Error al verificar ruta")
+		return true
 	}
 	return false
 }
+
+//AnalizarLineaComando esta verifica cada linea de comando enviada por analizador
 func AnalizarLineaComando(cadena string) {
 	arreglo := strings.Split(cadena, " ")
 	switch strings.ToLower(arreglo[0]) {
@@ -316,12 +320,17 @@ func AnalizarLineaComando(cadena string) {
 		}
 		break
 	case "mkdisk":
-		MKDSIK(arreglo)
+		fmt.Println(colorBlue, "Creando disco...")
+		MKDISK(arreglo)
 		break
 	case "pause":
 		fmt.Println("Precione Enter para continuar")
 		var input string
 		fmt.Scanln(&input)
+		break
+	case "rmdisk":
+		fmt.Println(colorBlue, "Verificando requisitos para eliminación...")
+		RMDISK(arreglo[1])
 		break
 	}
 }
@@ -343,7 +352,8 @@ type comMKDISK struct {
 	ext  string
 }
 
-func MKDSIK(cadena []string) {
+//MKDISK SE USA PARA COMPROBAR LOS COMANDOS
+func MKDISK(cadena []string) {
 	aux := 0
 	err := false
 	for i := 1; i < len(cadena); i++ {
@@ -356,12 +366,13 @@ func MKDSIK(cadena []string) {
 				err = true
 			}
 		} else if strings.ToLower(com[0]) == "-path" {
-			if strings.Contains(com[1], "@") {
-				strings.ReplaceAll(com[1], "@", " ")
+			direccion := com[1]
+			if strings.Contains(direccion, "@") {
+				direccion = strings.ReplaceAll(direccion, "@", " ")
 			}
-			if AnalizarRuta(com[1]) {
+			if AnalizarRuta(direccion) {
 				aux++
-				disk.ext = com[1]
+				disk.ext = direccion
 			} else {
 				err = true
 			}
@@ -386,25 +397,35 @@ func MKDSIK(cadena []string) {
 		fmt.Println(colorRed, "Error en las características del disco")
 	} else {
 		if aux >= 3 {
+			if aux == 3 {
+				disk.unit = 'm'
+			}
 			CrearDisco(disk.name, disk.tam, disk.unit, disk.ext)
 		} else {
 			fmt.Println(colorRed, "Falta un subcomando requerido")
 		}
 	}
 }
-func AnalizarRuta(direccion string) bool {
 
-	_, error := os.Stat(direccion)
-	if os.IsNotExist(error) {
-		error = os.Mkdir(direccion, 0777)
-		if error != nil {
-			fmt.Println(colorRed, "Se ha producido un error al intentar acceder a la ruta")
-			return false
+//AnalizarRuta sirve para comprobar que la ruta existe
+func AnalizarRuta(direccion string) bool {
+	carpetas := strings.Split(direccion, "/")
+	directorio := ""
+	for i := 0; i < len(carpetas); i++ {
+		directorio += "/" + carpetas[i]
+		_, error := os.Stat(directorio)
+		if os.IsNotExist(error) {
+			error = os.MkdirAll(direccion, 0777)
+			if error != nil {
+				fmt.Println(colorRed, "Se ha producido un error al intentar acceder a la ruta")
+				return false
+			}
 		}
 	}
 	return true
 }
 
+//VerificacionNombre sirve para comprobar que el nombre es correcto
 func VerificacionNombre(nombre string) bool {
 	for i := 0; i < len(nombre); i++ {
 		if !(nombre[i] >= 48 && nombre[i] <= 57 || nombre[i] >= 65 && nombre[i] <= 90 ||
@@ -418,6 +439,8 @@ func VerificacionNombre(nombre string) bool {
 	}
 	return true
 }
+
+//UNIT funcion que verifica si la unidad es correcta
 func UNIT(unidad string) byte {
 	if unidad == "m" {
 		return 'm'
@@ -429,9 +452,10 @@ func UNIT(unidad string) byte {
 
 }
 
+// CrearDisco crea el archivo binario verificando cada uno de sus atributos
 func CrearDisco(nombre string, tam int64, unidad byte, ruta string) {
-
-	file, err := os.Create(ruta + "/" + nombre)
+	rutita = ruta + "/" + nombre
+	file, err := os.Create(rutita)
 	defer file.Close()
 	if err != nil {
 		fmt.Println(colorRed, err)
@@ -445,23 +469,23 @@ func CrearDisco(nombre string, tam int64, unidad byte, ruta string) {
 		size = 1024 * 1024 * int(tam)
 	}
 	if size != 0 {
-		var otro int8 = 0
+		var cero int8 = 0
 
-		s := &otro
 		size = size - 1
-		fmt.Println(unsafe.Sizeof(otro))
-
 		var binario bytes.Buffer
-		binary.Write(&binario, binary.BigEndian, s)
+		binary.Write(&binario, binary.BigEndian, &cero)
 		escribirBytes(file, binario.Bytes())
 
 		file.Seek(int64(size), 0)
+
 		var binario2 bytes.Buffer
-		binary.Write(&binario2, binary.BigEndian, s)
+		binary.Write(&binario2, binary.BigEndian, &cero)
 		escribirBytes(file, binario2.Bytes())
 
 		file.Seek(0, 0)
 		CrearMBR(int64(size), file)
+		fmt.Println(colorGreen, "Nombre del disco: "+nombre)
+		AbrirArchivo()
 	}
 }
 func readNextBytes(file *os.File, number int) []byte {
@@ -483,24 +507,191 @@ func escribirBytes(file *os.File, bytes []byte) {
 	}
 }
 
+//MBR lleva todos los datos que requiere el mbr
 type MBR struct {
-	mbr_tam            int64
-	mbr_fecha_creacion [10]byte
-	mbr_disk_id        int8
-	part               particion
+	MbrTam           int64
+	MbrFechaCreacion [19]byte
+	MbrDiskID        uint8
+	Part             particion
 }
 
 type particion struct {
 }
 
-func CrearMBR(mbr_tam int64, file *os.File) {
+//CrearMBR aquí escribe el mbr en el archivo binario
+func CrearMBR(mbrTam int64, file *os.File) {
 	mbr := MBR{}
-	mbr.mbr_tam = mbr_tam
-	mbr.mbr_disk_id = 1
+	mbr.MbrTam = mbrTam
+	mbr.MbrDiskID = 1
 	t := time.Now()
-	fecha := string(t.Day()) + "-" + string(t.Month()) + "-" + string(t.Year())
-	copy(mbr.mbr_fecha_creacion[:], fecha)
+	fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	copy(mbr.MbrFechaCreacion[:], fecha)
+	fmt.Print(colorGreen, " Fecha de creación: ")
+	for i := 0; i < 10; i++ {
+		fmt.Print(colorGreen, string(mbr.MbrFechaCreacion[i]))
+	}
+	fmt.Println(colorGreen, " ")
+	tami := fmt.Sprintf("%d", mbr.MbrTam)
+	fmt.Println(colorGreen, "Tamaño: "+tami+" bytes")
 	var b2 bytes.Buffer
 	binary.Write(&b2, binary.BigEndian, &mbr)
 	escribirBytes(file, b2.Bytes())
+}
+
+//AbrirArchivo Se abre el disco
+func AbrirArchivo() {
+	file, err := os.Open(rutita)
+	defer file.Close()
+	if err != nil { //validar que no sea nulo.
+		log.Fatal(err)
+	}
+	mbr := MBR{}
+	var size int = int(unsafe.Sizeof(mbr))
+	file.Seek(0, 0)
+	data := readNextBytes(file, size)
+	buffer := bytes.NewBuffer(data)
+
+	err = binary.Read(buffer, binary.BigEndian, &mbr)
+	if err != nil {
+		panic(err)
+		//	fmt.Println(colorRed, "No se ha podido leer el MBR")
+	}
+
+	fmt.Println(mbr)
+	fmt.Printf("%d%s%d", mbr.MbrTam, mbr.MbrFechaCreacion[:], mbr.MbrDiskID)
+}
+
+//RMDISK ES PARA ELIMINAR EL ARCHIVO
+func RMDISK(direc string) {
+	dir := direccion(direc)
+
+	if dir != "" {
+		ext := strings.Split(dir, ".")
+		if ext[1] == "dsk" {
+			err := os.Remove(dir)
+			if err != nil {
+				fmt.Println(colorRed, "Error al intetntar eliminar archivo")
+			}
+			fmt.Println(colorGreen, "Success, archivo eliminado")
+		} else {
+			fmt.Println(colorRed, "El disco a eliminar debe ser .dsk")
+		}
+
+	}
+}
+
+//FDISK administra las particiones del disco
+func FDISK(subcomandos []string) {
+	aux := 0
+	error := false
+	tam := 1024
+	for i := 1; i < len(subcomandos); i++ {
+		subcadena := strings.Split(subcomandos[i], "->")
+		switch strings.ToLower(subcadena[0]) {
+		case "-size":
+			if size(subcadena[1]) != -1 {
+				aux++
+			} else {
+				fmt.Println(colorRed, "Imposible crear una partición del tamaño solicitado")
+				error = true
+			}
+			break
+		case "-unit":
+			tam = UNITFDISK(subcadena[1])
+			if tam != -1 {
+				aux++
+			} else {
+				fmt.Println(colorRed, "Verificar el parámetro de unit")
+				error = true
+			}
+			break
+		case "-path":
+			dir := direccion(subcomandos[i])
+			if dir != "" {
+				if ValidarRuta(dir) {
+					aux++
+				} else {
+					error = true
+				}
+			} else {
+				error = true
+			}
+			break
+		case "-type":
+			if TYPE(subcadena[1]) {
+				aux++
+			} else {
+				fmt.Println(colorRed, "Parámetro del comando -type incorrecto")
+				error = true
+			}
+			break
+		case "-fit":
+			if FIT(subcadena[1]) {
+				aux++
+			} else {
+				fmt.Println(colorRed, "El parámetro del comando fit es incorrecto")
+				error = true
+			}
+			break
+		case "-delete":
+			if DELETE(subcadena[1]) {
+				aux++
+			} else {
+				fmt.Println(colorRed, "El parámetro del comando delete es incorrecto")
+				error = true
+			}
+			break
+		case "-name":
+
+			break
+		case "-add":
+
+			break
+		}
+	}
+}
+
+//UNITFDISK verifica el tamaño del fdisk
+func UNITFDISK(unidad string) int {
+	unidad = strings.ToLower(unidad)
+	switch unidad {
+	case "k":
+		return 1024
+		break
+	case "b":
+		return 1
+		break
+	case "m":
+		return 1024 * 1024
+		break
+	}
+	return -1
+}
+
+//TYPE verifica si el parametro es correcto
+func TYPE(tipo string) bool {
+	tipo = strings.ToLower(tipo)
+	if tipo == "p" || tipo == "e" || tipo == "l" {
+		return true
+	}
+	return false
+}
+
+//FIT verifica los parametros para las particiones
+func FIT(fit string) bool {
+	fit = strings.ToLower(fit)
+	if fit == "bf" || fit == "ff" || fit == "wf" {
+		return true
+	}
+	return false
+}
+
+//DELETE verifica que los comandos de DELETE sean correctos
+func DELETE(delete string) bool {
+	delete = strings.ToLower(delete)
+	if delete == "fast" || delete == "full" {
+		return true
+	}
+	return false
 }
