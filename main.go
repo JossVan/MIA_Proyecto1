@@ -23,11 +23,13 @@ var colorGreen string
 var colorBlue string
 var disk comMKDISK
 var rutita string
+var mbr MBR
+var colorYellow string
 
 func colorcitos() {
 	colorRed = "\033[31m"
 	colorGreen = "\033[32m"
-	//	colorYellow := "\033[33m"
+	colorYellow = "\033[33m"
 	colorBlue = "\033[34m"
 	colorPurple = "\033[35m"
 	colorCyan = "\033[36m"
@@ -332,6 +334,8 @@ func AnalizarLineaComando(cadena string) {
 		fmt.Println(colorBlue, "Verificando requisitos para eliminación...")
 		RMDISK(arreglo[1])
 		break
+	case "fdisk":
+		break
 	}
 }
 
@@ -498,7 +502,6 @@ func readNextBytes(file *os.File, number int) []byte {
 
 	return bytes
 }
-
 func escribirBytes(file *os.File, bytes []byte) {
 	_, err := file.Write(bytes)
 
@@ -512,17 +515,32 @@ type MBR struct {
 	MbrTam           int64
 	MbrFechaCreacion [19]byte
 	MbrDiskID        uint8
-	Part             particion
+	Part1            particion
+	Part2            particion
+	Part3            particion
+	Part4            particion
 }
 
+//particion información de cada partición en el archivo
 type particion struct {
+	PartStatus byte
+	PartType   byte
+	PartFit    byte
+	PartStart  int64
+	PartSize   int64
+	PartName   [16]byte
+	Ready      bool
 }
 
 //CrearMBR aquí escribe el mbr en el archivo binario
 func CrearMBR(mbrTam int64, file *os.File) {
-	mbr := MBR{}
+	mbr = MBR{}
 	mbr.MbrTam = mbrTam
 	mbr.MbrDiskID = 1
+	mbr.Part1 = particion{}
+	mbr.Part2 = particion{}
+	mbr.Part3 = particion{}
+	mbr.Part4 = particion{}
 	t := time.Now()
 	fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
 		t.Hour(), t.Minute(), t.Second())
@@ -534,6 +552,7 @@ func CrearMBR(mbrTam int64, file *os.File) {
 	fmt.Println(colorGreen, " ")
 	tami := fmt.Sprintf("%d", mbr.MbrTam)
 	fmt.Println(colorGreen, "Tamaño: "+tami+" bytes")
+
 	var b2 bytes.Buffer
 	binary.Write(&b2, binary.BigEndian, &mbr)
 	escribirBytes(file, b2.Bytes())
@@ -546,20 +565,19 @@ func AbrirArchivo() {
 	if err != nil { //validar que no sea nulo.
 		log.Fatal(err)
 	}
-	mbr := MBR{}
-	var size int = int(unsafe.Sizeof(mbr))
+	mbr2 := MBR{}
+	var size int = int(unsafe.Sizeof(mbr2))
 	file.Seek(0, 0)
 	data := readNextBytes(file, size)
 	buffer := bytes.NewBuffer(data)
 
-	err = binary.Read(buffer, binary.BigEndian, &mbr)
+	err = binary.Read(buffer, binary.BigEndian, &mbr2)
 	if err != nil {
 		panic(err)
-		//	fmt.Println(colorRed, "No se ha podido leer el MBR")
 	}
 
-	fmt.Println(mbr)
-	fmt.Printf("%d%s%d", mbr.MbrTam, mbr.MbrFechaCreacion[:], mbr.MbrDiskID)
+	fmt.Println(mbr2)
+	fmt.Printf("%d%s%d", mbr2.MbrTam, mbr2.MbrFechaCreacion[:], mbr2.MbrDiskID)
 }
 
 //RMDISK ES PARA ELIMINAR EL ARCHIVO
@@ -584,17 +602,26 @@ func RMDISK(direc string) {
 //FDISK administra las particiones del disco
 func FDISK(subcomandos []string) {
 	aux := 0
-	error := false
+	err := false
 	tam := 1024
+	tamanio := 0
+	dir := ""
+	tipo := "p"
+	fit := "wf"
+	delete := ""
+	name := ""
+	add := 0
 	for i := 1; i < len(subcomandos); i++ {
 		subcadena := strings.Split(subcomandos[i], "->")
 		switch strings.ToLower(subcadena[0]) {
+
 		case "-size":
-			if size(subcadena[1]) != -1 {
+			tamanio = int(size(subcadena[1]))
+			if tamanio != -1 {
 				aux++
 			} else {
 				fmt.Println(colorRed, "Imposible crear una partición del tamaño solicitado")
-				error = true
+				err = true
 			}
 			break
 		case "-unit":
@@ -602,54 +629,101 @@ func FDISK(subcomandos []string) {
 			if tam != -1 {
 				aux++
 			} else {
-				fmt.Println(colorRed, "Verificar el parámetro de unit")
-				error = true
+				fmt.Println(colorYellow, "Verificar el parámetro de unit")
+				err = true
 			}
 			break
 		case "-path":
-			dir := direccion(subcomandos[i])
+			dir = direccion(subcomandos[i])
 			if dir != "" {
 				if ValidarRuta(dir) {
 					aux++
 				} else {
-					error = true
+					err = true
 				}
 			} else {
-				error = true
+				err = true
 			}
 			break
 		case "-type":
 			if TYPE(subcadena[1]) {
 				aux++
+				tipo = subcadena[1]
 			} else {
 				fmt.Println(colorRed, "Parámetro del comando -type incorrecto")
-				error = true
+				err = true
 			}
 			break
 		case "-fit":
 			if FIT(subcadena[1]) {
+				fit = subcadena[1]
 				aux++
 			} else {
 				fmt.Println(colorRed, "El parámetro del comando fit es incorrecto")
-				error = true
+				err = true
 			}
 			break
 		case "-delete":
 			if DELETE(subcadena[1]) {
 				aux++
+				delete = subcadena[1]
 			} else {
 				fmt.Println(colorRed, "El parámetro del comando delete es incorrecto")
-				error = true
+				err = true
 			}
 			break
 		case "-name":
-
+			if !ExisteNombreParticion(subcadena[1]) {
+				aux++
+				name = subcadena[1]
+			} else {
+				fmt.Println(colorYellow, "El nombre de la partición ya existe!")
+				err = true
+			}
 			break
 		case "-add":
-
+			numero, correcto := VerificarNumero(subcadena[1])
+			if correcto == true {
+				aux++
+				add = int(numero)
+			} else {
+				err = true
+			}
 			break
 		}
+
 	}
+	if err == false {
+		if aux >= 3 {
+			if delete != "" {
+
+			} else if add != 0 {
+
+			} else if dir != "" && name != "" && tamanio != 0 {
+				CrearParticionNueva(int64(tamanio), int64(tam), dir, tipo, fit, name)
+			}
+		} else {
+			fmt.Println(colorYellow, "Faltan parámetros requeridos!")
+		}
+	}
+}
+
+//ExisteNombreParticion busca en el mbr si hay una particion con el mismo nombre
+func ExisteNombreParticion(nombre string) bool {
+
+	return false
+}
+
+//VerificarNumero identifica un número negativo o positivo
+func VerificarNumero(num string) (int64, bool) {
+	numero, err := strconv.Atoi(num)
+	if err != nil {
+		fmt.Println(colorRed, "Tamaño incorrecto:", err)
+	} else {
+		//FALTA VERIFICAR SI HAY ESPACIO
+		return int64(numero), true
+	}
+	return 0, false
 }
 
 //UNITFDISK verifica el tamaño del fdisk
@@ -658,13 +732,11 @@ func UNITFDISK(unidad string) int {
 	switch unidad {
 	case "k":
 		return 1024
-		break
 	case "b":
 		return 1
-		break
+
 	case "m":
 		return 1024 * 1024
-		break
 	}
 	return -1
 }
@@ -694,4 +766,36 @@ func DELETE(delete string) bool {
 		return true
 	}
 	return false
+}
+
+//CrearParticionNueva crea una particion nueva en el disco
+func CrearParticionNueva(size int64, unidad int64, path string, tipo string, fit string, name string) {
+	size = size * unidad
+	if mbr.Part1.Ready == false && mbr.Part2.Ready == false && mbr.Part3.Ready == false && mbr.Part4.Ready == false {
+
+	}
+
+	//Se llena la particion
+
+}
+
+//CrearParticion crea la particion
+func CrearParticion(s int64, path string) {
+	file, err := os.Open(path)
+	defer file.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	mbr2 := MBR{}
+	inicio := int(unsafe.Sizeof(mbr2))
+	if s <= (mbr.MbrTam - int64(inicio)) {
+		var llenar int8 = 9
+		s = s - 1
+		file.Seek(int64(s), inicio)
+
+		var binario bytes.Buffer
+		binary.Write(&binario, binary.BigEndian, &llenar)
+		escribirBytes(file, binario.Bytes())
+		file.Seek(0, 0)
+	}
 }
