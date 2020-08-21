@@ -856,11 +856,24 @@ func InformacionParticion(name string, tipo string, fit string, size int64, star
 
 //CrearParticion crea la particion
 func CrearParticion(path string) {
-	files, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, os.ModeAppend)
+	files, err := os.Create(path)
 	defer files.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	var cero int8 = 0
+
+	var binario bytes.Buffer
+	binary.Write(&binario, binary.BigEndian, &cero)
+	escribirBytes(files, binario.Bytes())
+
+	files.Seek(mbr.MbrTam, 0)
+
+	var binario2 bytes.Buffer
+	binary.Write(&binario2, binary.BigEndian, &cero)
+	escribirBytes(files, binario2.Bytes())
+
 	files.Seek(0, 0)
 	var b3 bytes.Buffer
 	binary.Write(&b3, binary.BigEndian, &mbr)
