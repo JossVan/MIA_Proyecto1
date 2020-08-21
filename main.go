@@ -23,8 +23,8 @@ var colorGreen string
 var colorBlue string
 var disk comMKDISK
 var rutita string
-var mbr MBR
 var colorYellow string
+var mbr MBR
 
 func colorcitos() {
 	colorRed = "\033[31m"
@@ -43,7 +43,7 @@ func main() {
 	Analizador(eleccion + "$$")
 
 	for eleccion != "exit" {
-		fmt.Print(colorBlanco, "Introduzca un comando----:: ")
+		fmt.Print(colorBlanco, "\nIntroduzca un comando----:: ")
 		reader = bufio.NewReader(os.Stdin)
 		entrada, _ = reader.ReadString('\n')
 		eleccion = strings.TrimRight(entrada, "\r\n")
@@ -134,8 +134,14 @@ func Analizador(cadena string) {
 				estado = 0
 				AnalizarLineaComando(lineaComando)
 				lineaComando = ""
+			} else if cadena[i] == 92 {
+				lineaComando += cadenita
+				cadenita = ""
+				estado = 0
+				i--
 			} else {
 				estado = 0
+				i--
 			}
 			break
 		case 2:
@@ -160,6 +166,7 @@ func Analizador(cadena string) {
 				lineaComando += cadenita
 				cadenita = ""
 				estado = 0
+				i--
 			} else {
 				estado = 0
 			}
@@ -187,6 +194,8 @@ func Analizador(cadena string) {
 				estado = 0
 				if string(rune(cadena[i+1])) == "\n" {
 					i++
+					lineaComando += cadenita + " "
+					cadenita = ""
 				}
 			}
 			break
@@ -208,6 +217,7 @@ func Analizador(cadena string) {
 				i++
 				if cadena[i] == 42 {
 					i++
+					lineaComando += " "
 				}
 			}
 			break
@@ -249,6 +259,11 @@ func Analizador(cadena string) {
 			if cadena[i] == 92 {
 				i--
 				estado = 0
+			} else if caracter == "\n" {
+				lineaComando += cadenita
+				cadenita = ""
+				estado = 0
+				i--
 			} else if cadena[i] != 32 && (len(cadena) != (i + 2)) {
 				cadenita += caracter
 			} else {
@@ -299,6 +314,7 @@ func direccion(cadena string) string {
 
 //ValidarRuta valida si la dirección es correcta
 func ValidarRuta(ruta string) bool {
+	fmt.Println(colorYellow, ruta)
 	if _, err := os.Stat(ruta); err != nil {
 		if os.IsNotExist(err) {
 			fmt.Println(colorRed, "La ruta o archivo no existe")
@@ -312,6 +328,7 @@ func ValidarRuta(ruta string) bool {
 
 //AnalizarLineaComando esta verifica cada linea de comando enviada por analizador
 func AnalizarLineaComando(cadena string) {
+	fmt.Println(cadena)
 	arreglo := strings.Split(cadena, " ")
 	switch strings.ToLower(arreglo[0]) {
 	case "exec":
@@ -335,6 +352,7 @@ func AnalizarLineaComando(cadena string) {
 		RMDISK(arreglo[1])
 		break
 	case "fdisk":
+		FDISK(arreglo)
 		break
 	}
 }
@@ -502,6 +520,7 @@ func readNextBytes(file *os.File, number int) []byte {
 
 	return bytes
 }
+
 func escribirBytes(file *os.File, bytes []byte) {
 	_, err := file.Write(bytes)
 
@@ -529,7 +548,7 @@ type particion struct {
 	PartStart  int64
 	PartSize   int64
 	PartName   [16]byte
-	Ready      bool
+	PartDelete bool
 }
 
 //CrearMBR aquí escribe el mbr en el archivo binario
@@ -537,28 +556,32 @@ func CrearMBR(mbrTam int64, file *os.File) {
 	mbr = MBR{}
 	mbr.MbrTam = mbrTam
 	mbr.MbrDiskID = 1
-	mbr.Part1 = particion{}
-	mbr.Part2 = particion{}
-	mbr.Part3 = particion{}
-	mbr.Part4 = particion{}
+	mbr.Part1 = particion{PartStatus: 73}
+	mbr.Part2 = particion{PartStatus: 73}
+	mbr.Part3 = particion{PartStatus: 73}
+	mbr.Part4 = particion{PartStatus: 73}
 	t := time.Now()
 	fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
 		t.Hour(), t.Minute(), t.Second())
 	copy(mbr.MbrFechaCreacion[:], fecha)
-	fmt.Print(colorGreen, " Fecha de creación: ")
+	/*fmt.Print(colorGreen, " Fecha de creación: ")
 	for i := 0; i < 10; i++ {
 		fmt.Print(colorGreen, string(mbr.MbrFechaCreacion[i]))
 	}
-	fmt.Println(colorGreen, " ")
-	tami := fmt.Sprintf("%d", mbr.MbrTam)
-	fmt.Println(colorGreen, "Tamaño: "+tami+" bytes")
-
+	fmt.Println(colorGreen, " ")*/
+	/*tami := fmt.Sprintf("%d", mbr.MbrTam)
+	fmt.Println(colorGreen, "Tamaño: "+tami+" bytes")*/
+	tamMBR := int64(unsafe.Sizeof(mbr))
+	mbr.Part1.PartSize = mbr.MbrTam - tamMBR
+	mbr.Part1.PartStart = tamMBR + 1
+	//agrega el mbr al disco
 	var b2 bytes.Buffer
 	binary.Write(&b2, binary.BigEndian, &mbr)
 	escribirBytes(file, b2.Bytes())
+
 }
 
-//AbrirArchivo Se abre el disco
+//AbrirArchivo Se abre el disco para leer el MBR
 func AbrirArchivo() {
 	file, err := os.Open(rutita)
 	defer file.Close()
@@ -576,9 +599,12 @@ func AbrirArchivo() {
 		panic(err)
 	}
 
-	fmt.Println(mbr2)
-	fmt.Printf("%d%s%d", mbr2.MbrTam, mbr2.MbrFechaCreacion[:], mbr2.MbrDiskID)
+	//fmt.Println(mbr2)
+	fmt.Printf("%s%d%s%s%s%d", "Tamaño del disco: ", mbr2.MbrTam, "Fecha de creación: ", mbr2.MbrFechaCreacion[:], "ID de disco: ", mbr2.MbrDiskID)
+	fmt.Println()
 }
+
+//ActualizarMBR en este metodo se va actualizando la información de las particones
 
 //RMDISK ES PARA ELIMINAR EL ARCHIVO
 func RMDISK(direc string) {
@@ -589,7 +615,7 @@ func RMDISK(direc string) {
 		if ext[1] == "dsk" {
 			err := os.Remove(dir)
 			if err != nil {
-				fmt.Println(colorRed, "Error al intetntar eliminar archivo")
+				fmt.Println(colorRed, "Error al intentar eliminar archivo")
 			}
 			fmt.Println(colorGreen, "Success, archivo eliminado")
 		} else {
@@ -636,11 +662,7 @@ func FDISK(subcomandos []string) {
 		case "-path":
 			dir = direccion(subcomandos[i])
 			if dir != "" {
-				if ValidarRuta(dir) {
-					aux++
-				} else {
-					err = true
-				}
+				aux++
 			} else {
 				err = true
 			}
@@ -700,6 +722,7 @@ func FDISK(subcomandos []string) {
 			} else if add != 0 {
 
 			} else if dir != "" && name != "" && tamanio != 0 {
+
 				CrearParticionNueva(int64(tamanio), int64(tam), dir, tipo, fit, name)
 			}
 		} else {
@@ -770,32 +793,141 @@ func DELETE(delete string) bool {
 
 //CrearParticionNueva crea una particion nueva en el disco
 func CrearParticionNueva(size int64, unidad int64, path string, tipo string, fit string, name string) {
+	mbr = LeerMBR()
 	size = size * unidad
-	if mbr.Part1.Ready == false && mbr.Part2.Ready == false && mbr.Part3.Ready == false && mbr.Part4.Ready == false {
-
+	var s int64
+	var part int
+	s, part = PrimerAjuste(size, strings.ToLower(tipo))
+	if s != 0 && part != 0 {
+		InformacionParticion(name, tipo, fit, size, s, part)
+		CrearParticion(path)
 	}
 
-	//Se llena la particion
+}
+
+//InformacionParticion en este metodo se agrega toda la información al struct particion
+func InformacionParticion(name string, tipo string, fit string, size int64, start int64, numero int) {
+	nuevofit := ' '
+	if strings.ToLower(fit) == "bf" {
+		nuevofit = 'b'
+	} else if strings.ToLower(fit) == "ff" {
+		nuevofit = 'f'
+	} else if strings.ToLower(fit) == "wf" {
+		nuevofit = 'w'
+	}
+	nuevoTipo := ' '
+	if strings.ToLower(tipo) == "p" {
+		nuevoTipo = 'p'
+	} else if strings.ToLower(tipo) == "e" {
+		nuevoTipo = 'e'
+	}
+	if numero == 1 {
+		copy(mbr.Part1.PartName[:], name)
+		mbr.Part1.PartSize = size
+		mbr.Part1.PartStart = start
+		mbr.Part1.PartFit = byte(nuevofit)
+		mbr.Part1.PartType = byte(nuevoTipo)
+		mbr.Part1.PartStatus = 65
+
+	} else if numero == 2 {
+		copy(mbr.Part2.PartName[:], name)
+		mbr.Part2.PartSize = size
+		mbr.Part2.PartStart = start
+		mbr.Part2.PartFit = byte(nuevofit)
+		mbr.Part2.PartType = byte(nuevoTipo)
+		mbr.Part2.PartStatus = 65
+	} else if numero == 3 {
+		copy(mbr.Part3.PartName[:], name)
+		mbr.Part3.PartSize = size
+		mbr.Part3.PartStart = start
+		mbr.Part3.PartFit = byte(nuevofit)
+		mbr.Part3.PartType = byte(nuevoTipo)
+		mbr.Part3.PartStatus = 65
+	} else if numero == 4 {
+		copy(mbr.Part4.PartName[:], name)
+		mbr.Part4.PartSize = size
+		mbr.Part4.PartStart = start
+		mbr.Part4.PartFit = byte(nuevofit)
+		mbr.Part4.PartType = byte(nuevoTipo)
+		mbr.Part4.PartStatus = 65
+	}
 
 }
 
 //CrearParticion crea la particion
-func CrearParticion(s int64, path string) {
-	file, err := os.Open(path)
+func CrearParticion(path string) {
+	files, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, os.ModeAppend)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	files.Seek(0, 0)
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &mbr)
+	escribirBytes(files, b3.Bytes())
+}
+
+//PrimerAjuste este metodo devuelve la posicion inicial del primer espacio que encuentre
+func PrimerAjuste(tam int64, tipo string) (int64, int) {
+
+	if mbr.Part1.PartStatus == 73 && mbr.Part1.PartSize >= tam {
+		mbr.Part1.PartSize = tam
+		if mbr.Part1.PartDelete == false {
+			mbr.Part2.PartStart = int64(unsafe.Sizeof(mbr)) + tam
+			mbr.Part2.PartSize = mbr.MbrTam - int64(unsafe.Sizeof(mbr)) - tam
+		}
+		return mbr.Part1.PartStart, 1
+	} else if mbr.Part2.PartStatus == 73 && mbr.Part2.PartSize >= tam {
+		if mbr.Part1.PartType == 101 && tipo == "e" {
+			fmt.Println(colorRed, "Ya existe una partición extendida")
+			return 0, 0
+		}
+		mbr.Part2.PartSize = tam
+		if mbr.Part1.PartDelete == false {
+			mbr.Part3.PartStart = (int64(unsafe.Sizeof(mbr))) + mbr.Part1.PartSize + mbr.Part2.PartSize
+			mbr.Part3.PartSize = mbr.MbrTam - mbr.Part1.PartSize - mbr.Part2.PartSize
+		}
+		return mbr.Part2.PartStart, 2
+	} else if mbr.Part3.PartStatus == 73 && mbr.Part3.PartSize >= tam {
+		if (mbr.Part1.PartType == 101 || mbr.Part2.PartType == 101) && tipo == "e" {
+			fmt.Println(colorRed, "Ya existe una partición extendida")
+			return 0, 0
+		}
+		mbr.Part3.PartSize = tam
+		if mbr.Part1.PartDelete == false {
+			mbr.Part4.PartStart = (int64(unsafe.Sizeof(mbr))) + mbr.Part3.PartSize + mbr.Part2.PartSize + mbr.Part1.PartSize
+			mbr.Part4.PartSize = mbr.MbrTam - mbr.Part1.PartSize - mbr.Part2.PartSize - mbr.Part3.PartSize
+		}
+		return mbr.Part3.PartStart, 3
+	} else if mbr.Part4.PartStatus == 73 && mbr.Part4.PartSize >= tam {
+		if (mbr.Part1.PartType == 101 || mbr.Part2.PartType == 101 || mbr.Part3.PartType == 101) && tipo == "e" {
+			fmt.Println(colorRed, "Ya existe una partición extendida")
+			return 0, 0
+		}
+		mbr.Part4.PartSize = tam
+		return mbr.Part4.PartStart, 4
+	}
+	fmt.Println(colorYellow, "No hay espacio en la partición")
+	return 0, 0
+}
+
+//LeerMBR este metodo devuelve el mbr actual del disco
+func LeerMBR() MBR {
+	file, err := os.Open(rutita)
 	defer file.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
 	mbr2 := MBR{}
-	inicio := int(unsafe.Sizeof(mbr2))
-	if s <= (mbr.MbrTam - int64(inicio)) {
-		var llenar int8 = 9
-		s = s - 1
-		file.Seek(int64(s), inicio)
+	var size int = int(unsafe.Sizeof(mbr2))
+	file.Seek(0, 0)
+	data := readNextBytes(file, size)
+	buffer := bytes.NewBuffer(data)
 
-		var binario bytes.Buffer
-		binary.Write(&binario, binary.BigEndian, &llenar)
-		escribirBytes(file, binario.Bytes())
-		file.Seek(0, 0)
+	err = binary.Read(buffer, binary.BigEndian, &mbr2)
+	if err != nil {
+		panic(err)
 	}
+	fmt.Println(mbr2)
+	return mbr2
 }
