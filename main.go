@@ -42,7 +42,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
 	eleccion := strings.TrimRight(entrada, "\r\n")
-	Analizador("exec -path->/home/josselyn/doc.mia" + "$$")
+	Analizador("exec -path->/home/josselyn/Documentos/Universidad/Archivos/prueba1.mia" + "$$")
 
 	for eleccion != "exit" {
 		fmt.Print(colorBlanco, "\nIntroduzca un comando----:: ")
@@ -334,24 +334,30 @@ func duracion() {
 //AnalizarLineaComando esta verifica cada linea de comando enviada por analizador
 func AnalizarLineaComando(cadena string) {
 	fmt.Println(colorCyan, "*****Comando detectado*****")
-	fmt.Println(colorCyan, cadena)
-	fmt.Println(colorCyan, "***************************")
-	duracion()
 	arreglo := strings.Split(cadena, " ")
 	switch strings.ToLower(arreglo[0]) {
 	case "exec":
-		fmt.Println(colorBlue, "analizando ruta...")
-		duracion()
 		direccion := direccion(arreglo[1])
 		if !ValidarRuta(direccion) {
+			fmt.Println(colorBlue, "analizando ruta...")
+			duracion()
+			fmt.Println(colorCyan, cadena)
+			fmt.Println(colorCyan, "***************************")
+			duracion()
 			CargaMasiva(direccion)
 		}
 		break
 	case "mkdisk":
+		fmt.Println(colorCyan, cadena)
+		fmt.Println(colorCyan, "***************************")
+		duracion()
 		fmt.Println(colorBlue, "Creando disco...")
 		MKDISK(arreglo)
 		break
 	case "pause":
+		fmt.Println(colorCyan, cadena)
+		fmt.Println(colorCyan, "***************************")
+		duracion()
 		fmt.Println(colorBlue, "Presione una tecla para continuar...")
 		fmt.Scanln()
 		break
@@ -360,6 +366,9 @@ func AnalizarLineaComando(cadena string) {
 		RMDISK(arreglo[1])
 		break
 	case "fdisk":
+		fmt.Println(colorCyan, cadena)
+		fmt.Println(colorCyan, "***************************")
+		duracion()
 		FDISK(arreglo)
 		break
 	default:
@@ -423,6 +432,9 @@ func MKDISK(cadena []string) {
 			} else {
 				err = true
 			}
+		} else if com[0] != "" {
+			fmt.Println(colorRed, "Comando no permitido!")
+			return
 		}
 	}
 	if err == true {
@@ -617,11 +629,11 @@ func AbrirArchivo() {
 	file.Seek(0, 0)
 	data := readNextBytes(file, size)
 	buffer := bytes.NewBuffer(data)
-
 	err = binary.Read(buffer, binary.BigEndian, &mbr2)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println(colorGreen)
 	fmt.Printf("%s%d", " Tamaño del disco: ", mbr2.MbrTam)
 	fmt.Println()
 	fmt.Println(" Fecha de creación: " + BytesToString(mbr2.MbrFechaCreacion))
@@ -748,9 +760,11 @@ func FDISK(subcomandos []string) {
 				err = true
 			}
 			break
-			/*	default:
-				fmt.Println(colorYellow, "Parámetro no reconocido!")
-				return*/
+		case "":
+			break
+		default:
+			fmt.Println(colorYellow, "Parámetro no reconocido!")
+			return
 		}
 
 	}
@@ -895,7 +909,7 @@ func CrearParticionNueva(size int64, unidad int64, path string, tipo string, fit
 //CrearEBR crea el ebr y lo situa en el archivo
 func CrearEBR(start int64, size int64) {
 	ebr = EBR{PartStatus: 73, PartStart: start}
-	ebr.PartSize = size
+	ebr.PartSize = (size - int64(unsafe.Sizeof(ebr)))
 	ebr.PartNext = -1
 }
 
@@ -986,8 +1000,6 @@ func PrimerAjuste(tam int64) (int64, int) {
 			if !mbr.Particiones[i].PartDelete && i <= 3 {
 				mbr.Particiones[i+1].PartStart = mbr.Particiones[i].PartStart + tam + 1
 				mbr.Particiones[i+1].PartSize = mbr.MbrTam - int64(unsafe.Sizeof(mbr)) - mbr.Particiones[i].PartSize
-				fmt.Printf("%s%d", "El tamaño de la partición: ", mbr.Particiones[i].PartSize)
-				fmt.Printf("%s%d", "El tamaño de la partición siguiente: ", mbr.Particiones[i+1].PartSize)
 			}
 			return mbr.Particiones[i].PartStart, i
 		}
@@ -1027,7 +1039,6 @@ func ExtraerEBR(path string, start int64) EBR {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(ebr2)
 	return ebr2
 }
 
@@ -1036,6 +1047,8 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 	tamEBR := unsafe.Sizeof(ebr)
 	if ebr.PartSize >= size && ebr.PartStatus == 73 {
 		Rest := ebr.PartSize - size
+		fmt.Printf("%dr", Rest)
+		fmt.Println()
 		startNew := ebr.PartStart + size + 1
 		ebr.PartFit = fit
 		copy(ebr.PartName[:], name)
@@ -1043,13 +1056,20 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 		ebr.PartStatus = 65
 		if int64(Rest) >= int64(tamEBR) {
 			ebr.PartNext = startNew
+			MensajeConfirmacion()
+			fmt.Println(ebr)
+			EscribirEBR(ebr.PartStart, path)
 			CrearEBR(startNew, Rest)
 			EscribirEBR(startNew, path)
+		} else {
+			fmt.Println(ebr)
+			MensajeConfirmacion()
+			EscribirEBR(ebr.PartStart, path)
 		}
 		return
 	}
 
-	/*for ebr.PartNext != -1 {
+	for ebr.PartNext != -1 {
 		ebr = ExtraerEBR(path, ebr.PartNext)
 		if ebr.PartSize >= size && ebr.PartStatus == 73 {
 			Rest := ebr.PartSize - size
@@ -1060,13 +1080,36 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 			ebr.PartStatus = 65
 			if int64(Rest) >= int64(tamEBR) {
 				ebr.PartNext = startNew
+				MensajeConfirmacion()
+				fmt.Println(ebr)
+				EscribirEBR(ebr.PartStart, path)
 				CrearEBR(startNew, Rest)
 				EscribirEBR(startNew, path)
+			} else {
+				MensajeConfirmacion()
+				EscribirEBR(ebr.PartStart, path)
 			}
 			return
 		}
-	}*/
+	}
 	fmt.Println(colorYellow, "No hay más espacio en la partición extendida")
+}
+
+//MensajeConfirmacion este metodo imprime un mensaje
+func MensajeConfirmacion() {
+	n := ""
+	for i := 0; i < len(ebr.PartName); i++ {
+		if ebr.PartName[i] != 0 {
+			n += string(rune(ebr.PartName[i]))
+		} else {
+			break
+		}
+	}
+	fmt.Println(colorGreen, "****Información de la partición lógica****")
+	fmt.Println(" Nombre de la partición: " + n)
+	fmt.Printf("%s%d", " Tamaño de la partición: ", ebr.PartSize)
+	fmt.Println("\n*******************************************")
+
 }
 
 //LeerMBR este metodo devuelve el mbr actual del disco
