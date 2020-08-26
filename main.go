@@ -42,7 +42,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
 	eleccion := strings.TrimRight(entrada, "\r\n")
-	Analizador("fdisk -delete->fast -path->/home/josselyn/archivoBinario/disco.dsk -name->particion2" + "$$")
+	Analizador(eleccion + "$$")
 
 	for eleccion != "exit" {
 		fmt.Print(colorBlanco, "\nIntroduzca un comando----:: ")
@@ -777,14 +777,19 @@ func FDISK(subcomandos []string) {
 	if aux >= 3 {
 		if delete != "" && dir != "" && name != "" {
 			EliminarParticion(dir, name, delete)
-		} else if add != 0 {
-
+		} else if add != 0 && dir != "" && name != "" {
+			AgregarOQuitar(dir, int64(add), name, int64(tam))
 		} else if dir != "" && name != "" && tamanio != 0 {
 			CrearParticionNueva(int64(tamanio), int64(tam), dir, tipo, fit, name)
 		}
 	} else {
 		fmt.Println(colorYellow, "Faltan parámetros requeridos!")
 	}
+}
+
+//AgregarOQuitar este metodo agrega o quita espacio de una particion
+func AgregarOQuitar(path string, add int64, name string, unidades int64) {
+
 }
 
 //EliminarParticion este metodo realiza la eliminación de una partición
@@ -837,7 +842,7 @@ func mensajeEliminar(ss int64, name string, tipo string, tipo2 string) {
 	fmt.Println(colorRed, "***Información de partición eliminada***")
 	fmt.Println(" Nombre de la partición: " + name)
 	fmt.Printf("%s%d%s", "Tamaño de la partición: ", ss, "\n")
-	fmt.Println(" Tipo de partición: " + tipo2 + "\n")
+	fmt.Println(" Tipo de partición: " + tipo2)
 	fmt.Println(" Tipo de eliminación: " + tipo)
 	fmt.Println(colorRed, "****************************************")
 }
