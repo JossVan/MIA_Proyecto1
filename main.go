@@ -42,7 +42,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
 	eleccion := strings.TrimRight(entrada, "\r\n")
-	Analizador("exec -path->/home/josselyn/Documentos/Universidad/Archivos/prueba1.mia" + "$$")
+	Analizador("fdisk -delete->fast -path->/home/josselyn/archivoBinario/disco.dsk -name->particion2" + "$$")
 
 	for eleccion != "exit" {
 		fmt.Print(colorBlanco, "\nIntroduzca un comando----:: ")
@@ -60,6 +60,7 @@ func Analizador(cadena string) {
 	cadenita := ""
 	lineaComando := ""
 	escape := false
+	comilla := false
 	for i := 0; i < len(cadena); i++ {
 		caracter := string(rune(cadena[i]))
 
@@ -89,6 +90,7 @@ func Analizador(cadena string) {
 				estado = 4
 			} else if cadena[i] == 34 {
 				estado = 5
+				comilla = true
 			} else if cadena[i] == 35 {
 				estado = 7
 				cadenita += caracter
@@ -205,13 +207,17 @@ func Analizador(cadena string) {
 			if cadena[i] == 47 {
 				estado = 5
 				cadenita += caracter
-			} else if cadena[i] == 32 {
+			} else if cadena[i] == 32 && comilla == true {
 				cadenita += "@"
-
+			} else if cadena[i] == 32 && comilla == false {
+				estado = 0
+				lineaComando += cadenita + " "
+				cadenita = ""
 			} else if cadena[i] == 34 {
 				estado = 0
 				lineaComando += cadenita + " "
 				cadenita = ""
+				comilla = false
 			} else if caracter != "\n" && cadena[i] != 92 && (len(cadena) != (i + 2)) {
 				estado = 5
 				cadenita += caracter
@@ -567,6 +573,7 @@ type MBR struct {
 	MbrTam           int64
 	MbrFechaCreacion [19]byte
 	MbrDiskID        uint8
+	MbrRecorrido     int64
 	Particiones      [4]particion
 }
 
@@ -675,7 +682,6 @@ func RMDISK(direc string) {
 //FDISK administra las particiones del disco
 func FDISK(subcomandos []string) {
 	aux := 0
-	err := false
 	tam := 1024
 	tamanio := 0
 	dir := ""
@@ -695,7 +701,7 @@ func FDISK(subcomandos []string) {
 				aux++
 			} else {
 				fmt.Println(colorRed, "Imposible crear una partición del tamaño solicitado")
-				err = true
+				return
 			}
 			break
 		case "-unit":
@@ -704,7 +710,7 @@ func FDISK(subcomandos []string) {
 				aux++
 			} else {
 				fmt.Println(colorYellow, "Verificar el parámetro de unit")
-				err = true
+				return
 			}
 			break
 		case "-path":
@@ -712,7 +718,7 @@ func FDISK(subcomandos []string) {
 			if dir != "" {
 				aux++
 			} else {
-				err = true
+				return
 			}
 			break
 		case "-type":
@@ -721,7 +727,7 @@ func FDISK(subcomandos []string) {
 				tipo = subcadena[1]
 			} else {
 				fmt.Println(colorRed, "Parámetro del comando -type incorrecto")
-				err = true
+				return
 			}
 			break
 		case "-fit":
@@ -730,16 +736,16 @@ func FDISK(subcomandos []string) {
 				aux++
 			} else {
 				fmt.Println(colorRed, "El parámetro del comando fit es incorrecto")
-				err = true
+				return
 			}
 			break
 		case "-delete":
 			if DELETE(subcadena[1]) {
-				aux++
 				delete = subcadena[1]
+				aux++
 			} else {
 				fmt.Println(colorRed, "El parámetro del comando delete es incorrecto")
-				err = true
+				return
 			}
 			break
 		case "-name":
@@ -748,7 +754,7 @@ func FDISK(subcomandos []string) {
 				name = subcadena[1]
 			} else {
 				fmt.Println(colorYellow, "El nombre de la partición no tiene el formato correcto!")
-				err = true
+				return
 			}
 			break
 		case "-add":
@@ -757,7 +763,7 @@ func FDISK(subcomandos []string) {
 				aux++
 				add = int(numero)
 			} else {
-				err = true
+				return
 			}
 			break
 		case "":
@@ -768,33 +774,176 @@ func FDISK(subcomandos []string) {
 		}
 
 	}
-	if err == false {
-		if aux >= 3 {
-			if delete != "" {
+	if aux >= 3 {
+		if delete != "" && dir != "" && name != "" {
+			EliminarParticion(dir, name, delete)
+		} else if add != 0 {
 
-			} else if add != 0 {
+		} else if dir != "" && name != "" && tamanio != 0 {
+			CrearParticionNueva(int64(tamanio), int64(tam), dir, tipo, fit, name)
+		}
+	} else {
+		fmt.Println(colorYellow, "Faltan parámetros requeridos!")
+	}
+}
 
-			} else if dir != "" && name != "" && tamanio != 0 {
-				CrearParticionNueva(int64(tamanio), int64(tam), dir, tipo, fit, name)
+//EliminarParticion este metodo realiza la eliminación de una partición
+func EliminarParticion(path string, name string, tipo string) {
+	mbr = LeerMBR(path)
+
+	for i := 0; i < len(mbr.Particiones); i++ {
+		nombreParticion := ""
+		//Este ciclo forma el nombre de la partición logica
+		for j := 0; j < len(mbr.Particiones[i].PartName); j++ {
+			if mbr.Particiones[i].PartName[j] != 0 {
+				nombreParticion += string(rune(mbr.Particiones[i].PartName[j]))
+			} else {
+				break
 			}
+		}
+		//final
+		// Verifica si está en la partición
+		if name == nombreParticion {
+			var nuevoNombre [16]byte
+			tt := mbr.Particiones[i].PartFit
+			mbr.Particiones[i].PartName = nuevoNombre
+			mbr.Particiones[i].PartStatus = 73
+			mbr.Particiones[i].PartType = 0
+			mbr.Particiones[i].PartFit = 0
+			mbr.Particiones[i].PartPartition = false
+			mbr.Particiones[i].PartDelete = true
+			ss := int(mbr.Particiones[i].PartSize)
+			if strings.ToLower(tipo) == "fast" {
+				EscribirMBR(path)
+				mensajeEliminar(int64(ss), name, "Parcial", string(rune(tt)))
+			} else {
+				EliminacionFULLP(mbr.Particiones[i].PartStart, path, mbr.Particiones[i].PartSize)
+				mensajeEliminar(int64(ss), name, "Total", string(rune(tt)))
+			}
+			return
+		}
+
+	}
+	for i := 0; i < len(mbr.Particiones); i++ {
+		if mbr.Particiones[i].PartType == byte('e') {
+			ebr = ExtraerEBR(path, mbr.Particiones[i].PartStart)
+			BuscarEliminarLogica(name, path, tipo)
+			break
+		}
+	}
+	fmt.Println(colorYellow, "No existe el nombre de la partición, imposible eliminarla.")
+}
+func mensajeEliminar(ss int64, name string, tipo string, tipo2 string) {
+	fmt.Println(colorRed, "***Información de partición eliminada***")
+	fmt.Println(" Nombre de la partición: " + name)
+	fmt.Printf("%s%d%s", "Tamaño de la partición: ", ss, "\n")
+	fmt.Println(" Tipo de partición: " + tipo2 + "\n")
+	fmt.Println(" Tipo de eliminación: " + tipo)
+	fmt.Println(colorRed, "****************************************")
+}
+
+//BuscarEliminarLogica este metodo busca la partición que se desea eliminar, si está la elimina
+func BuscarEliminarLogica(name string, path string, tipo string) {
+	nombre := ""
+	for i := 0; i < len(ebr.PartName); i++ {
+		if ebr.PartName[i] != 0 {
+			nombre += string(rune(ebr.PartName[i]))
+		}
+	}
+	if nombre == name {
+		ss := ebr.PartSize
+		var nuevoNombre [16]byte
+		ebr.PartName = nuevoNombre
+		ebr.PartFit = 0
+		ebr.PartStatus = 73
+		if tipo == "fast" {
+			EscribirEBR(ebr.PartStart, path)
+			mensajeEliminar(ss, name, "Parcial", "Lógica")
 		} else {
-			fmt.Println(colorYellow, "Faltan parámetros requeridos!")
+			EliminacionFULLP(ebr.PartStart, path, ebr.PartSize)
+			mensajeEliminar(ss, name, "Total", "Lógica")
+		}
+		return
+	}
+	for ebr.PartNext != -1 {
+		ebr = ExtraerEBR(path, ebr.PartNext)
+		if nombre == name {
+			ss := ebr.PartSize
+			var nuevoNombre [16]byte
+			ebr.PartName = nuevoNombre
+			ebr.PartFit = 0
+			ebr.PartStatus = 73
+			if tipo == "fast" {
+				EscribirEBR(ebr.PartStart, path)
+				mensajeEliminar(ss, name, "Parcial", "Lógica")
+			} else {
+				EliminacionFULLP(ebr.PartStart, path, ebr.PartSize)
+				mensajeEliminar(ss, name, "Total", "Lógica")
+			}
+			return
 		}
 	}
 }
 
+//EscribirMBR modifica la información del mbr
+func EscribirMBR(path string) {
+	files, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	files.Seek(0, 0)
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &mbr)
+	escribirBytes(files, b3.Bytes())
+}
+
+//EliminacionFULLP hace una eliminacion completa de la particion
+func EliminacionFULLP(start int64, path string, size int64) {
+	files, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	var FULL uint8 = 0
+	files.Seek(start, 0)
+	var binario bytes.Buffer
+	binary.Write(&binario, binary.BigEndian, &FULL)
+	escribirBytes(files, binario.Bytes())
+
+	files.Seek(size, 1)
+	var binario2 bytes.Buffer
+	binary.Write(&binario2, binary.BigEndian, &FULL)
+	escribirBytes(files, binario2.Bytes())
+
+}
+
 //ExisteNombreParticion busca en el mbr si hay una particion con el mismo nombre
-func ExisteNombreParticion(nombre string) bool {
+func ExisteNombreParticion(nom string, path string) bool {
 	for i := 0; i < 4; i++ {
 		nombreAnalizar := ""
 		for j := 0; j < len(mbr.Particiones[i].PartName); j++ {
-			if mbr.Particiones[i].PartName[j] == 0 {
+			if mbr.Particiones[i].PartName[j] != 0 {
+				nombreAnalizar += string(rune(mbr.Particiones[i].PartName[j]))
+			} else {
 				break
 			}
-			nombreAnalizar += string(mbr.Particiones[i].PartName[j])
 		}
-		if nombre == nombreAnalizar {
+		if nom == nombreAnalizar {
 			return true
+		}
+		if mbr.Particiones[i].PartType == byte('e') {
+			ebr = ExtraerEBR(path, mbr.Particiones[i].PartStart)
+			for ebr.PartNext != -1 {
+				for j := 0; j < len(mbr.Particiones[i].PartName); j++ {
+					if mbr.Particiones[i].PartName[j] != 0 {
+						nombreAnalizar += string(rune(mbr.Particiones[i].PartName[j]))
+					}
+				}
+				if nom == nombreAnalizar {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -874,7 +1023,7 @@ func CrearParticionNueva(size int64, unidad int64, path string, tipo string, fit
 		fmt.Println(colorYellow, "Ya existe una partición extendida")
 		return
 	}
-	if ExisteNombreParticion(name) {
+	if ExisteNombreParticion(name, path) {
 		fmt.Println(colorYellow, "El nombre de la partición ya existe!")
 		return
 	}
@@ -992,14 +1141,15 @@ func CrearParticion(path string, name string, tipo string, numero int) {
 
 //PrimerAjuste este metodo devuelve la posicion inicial del primer espacio que encuentre
 func PrimerAjuste(tam int64) (int64, int) {
-
 	for i := 0; i < 4; i++ {
-
-		if !mbr.Particiones[i].PartPartition && mbr.Particiones[i].PartSize >= tam {
+		TAM := mbr.Particiones[i].PartSize
+		if !mbr.Particiones[i].PartPartition && TAM >= tam {
 			mbr.Particiones[i].PartSize = tam
-			if !mbr.Particiones[i].PartDelete && i <= 3 {
+			mbr.MbrRecorrido += mbr.Particiones[i].PartSize
+			if !mbr.Particiones[i].PartDelete && i < 3 {
 				mbr.Particiones[i+1].PartStart = mbr.Particiones[i].PartStart + tam + 1
-				mbr.Particiones[i+1].PartSize = mbr.MbrTam - int64(unsafe.Sizeof(mbr)) - mbr.Particiones[i].PartSize
+				mbr.Particiones[i+1].PartSize = mbr.MbrTam - int64(unsafe.Sizeof(mbr)) - mbr.MbrRecorrido
+				fmt.Printf("%d", (mbr.Particiones[i+1].PartSize / 1024 / 1024))
 			}
 			return mbr.Particiones[i].PartStart, i
 		}
@@ -1045,34 +1195,19 @@ func ExtraerEBR(path string, start int64) EBR {
 //CrearLogica Verifica si se puede crear una logica, si hay espacio la crea
 func CrearLogica(path string, size int64, name string, fit byte) {
 	tamEBR := unsafe.Sizeof(ebr)
-	if ebr.PartSize >= size && ebr.PartStatus == 73 {
-		Rest := ebr.PartSize - size
-		fmt.Printf("%dr", Rest)
-		fmt.Println()
-		startNew := ebr.PartStart + size + 1
-		ebr.PartFit = fit
-		copy(ebr.PartName[:], name)
-		ebr.PartSize = size
-		ebr.PartStatus = 65
-		if int64(Rest) >= int64(tamEBR) {
-			ebr.PartNext = startNew
-			MensajeConfirmacion()
-			fmt.Println(ebr)
-			EscribirEBR(ebr.PartStart, path)
-			CrearEBR(startNew, Rest)
-			EscribirEBR(startNew, path)
+	nombreParticion := ""
+	for j := 0; j < len(ebr.PartName); j++ {
+		if ebr.PartName[j] != 0 {
+			nombreParticion += string(rune(ebr.PartName[j]))
 		} else {
-			fmt.Println(ebr)
-			MensajeConfirmacion()
-			EscribirEBR(ebr.PartStart, path)
+			break
 		}
-		return
 	}
-
-	for ebr.PartNext != -1 {
-		ebr = ExtraerEBR(path, ebr.PartNext)
+	if nombreParticion != name {
 		if ebr.PartSize >= size && ebr.PartStatus == 73 {
 			Rest := ebr.PartSize - size
+			fmt.Printf("%dr", Rest)
+			fmt.Println()
 			startNew := ebr.PartStart + size + 1
 			ebr.PartFit = fit
 			copy(ebr.PartName[:], name)
@@ -1086,9 +1221,46 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 				CrearEBR(startNew, Rest)
 				EscribirEBR(startNew, path)
 			} else {
+				fmt.Println(ebr)
 				MensajeConfirmacion()
 				EscribirEBR(ebr.PartStart, path)
 			}
+			return
+		}
+	}
+	for ebr.PartNext != -1 {
+		ebr = ExtraerEBR(path, ebr.PartNext)
+		nombreParticion := ""
+		for j := 0; j < len(ebr.PartName); j++ {
+			if ebr.PartName[j] != 0 {
+				nombreParticion += string(rune(ebr.PartName[j]))
+			} else {
+				break
+			}
+		}
+		if nombreParticion != name {
+			if ebr.PartSize >= size && ebr.PartStatus == 73 {
+				Rest := ebr.PartSize - size
+				startNew := ebr.PartStart + size + 1
+				ebr.PartFit = fit
+				copy(ebr.PartName[:], name)
+				ebr.PartSize = size
+				ebr.PartStatus = 65
+				if int64(Rest) >= int64(tamEBR) {
+					ebr.PartNext = startNew
+					MensajeConfirmacion()
+					fmt.Println(ebr)
+					EscribirEBR(ebr.PartStart, path)
+					CrearEBR(startNew, Rest)
+					EscribirEBR(startNew, path)
+				} else {
+					MensajeConfirmacion()
+					EscribirEBR(ebr.PartStart, path)
+				}
+				return
+			}
+		} else {
+			fmt.Println(colorYellow, "Ya hay una partición lógica con este nombre!")
 			return
 		}
 	}
@@ -1117,7 +1289,7 @@ func LeerMBR(path string) MBR {
 	file, err := os.Open(path)
 	defer file.Close()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("No se encontró la ruta del archivo")
 	}
 	mbr2 := MBR{}
 	var size int = int(unsafe.Sizeof(mbr2))
