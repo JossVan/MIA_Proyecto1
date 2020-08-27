@@ -78,8 +78,13 @@ func Analizador(cadena string) {
 				cadenita += caracter
 				estado = 9
 			} else if cadena[i] == 45 {
-				estado = 8
-				lineaComando += caracter
+				if cadena[i+1] >= 48 && cadena[i+1] <= 57 {
+					estado = 3
+					cadenita += caracter
+				} else {
+					estado = 8
+					lineaComando += caracter
+				}
 			} else if cadena[i] == 46 {
 				estado = 0
 				lineaComando += caracter
@@ -167,7 +172,7 @@ func Analizador(cadena string) {
 				cadenita = ""
 				estado = 0
 			} else if caracter == "\n" {
-				lineaComando += cadenita
+				lineaComando += cadenita + " "
 				cadenita = ""
 				estado = 0
 				i--
@@ -789,7 +794,85 @@ func FDISK(subcomandos []string) {
 
 //AgregarOQuitar este metodo agrega o quita espacio de una particion
 func AgregarOQuitar(path string, add int64, name string, unidades int64) {
+	add = add * unidades
+	mbr = LeerMBR(path)
+	for i := 0; i < len(mbr.Particiones); i++ {
+		nombreParticion := ""
+		//Este ciclo forma el nombre de la partición
+		for j := 0; j < len(mbr.Particiones[i].PartName); j++ {
 
+			if mbr.Particiones[i].PartName[j] != 0 {
+				nombreParticion += string(rune(mbr.Particiones[i].PartName[j]))
+			} else {
+				break
+			}
+		}
+		//final
+		if nombreParticion == name {
+			if add < 0 {
+				if mbr.Particiones[i].PartSize > (-1 * add) {
+					mbr.Particiones[i].PartSize += add
+					EscribirMBR(path)
+					mensajeCreado(path, nombreParticion, mbr.Particiones[i].PartSize-add, mbr.Particiones[i].PartSize)
+					return
+				}
+			} else {
+				tamañoFuturo := mbr.Particiones[i].PartSize + add
+				if i < 3 {
+					tt := mbr.Particiones[i].PartStart + int64(tamañoFuturo)
+
+					for j := i + 1; j < len(mbr.Particiones); j++ {
+						startSiguiente := mbr.Particiones[j].PartStart
+						if tt < startSiguiente {
+							mbr.Particiones[i].PartSize = tamañoFuturo
+							mensajeCreado(path, nombreParticion, mbr.Particiones[i].PartSize-add, mbr.Particiones[i].PartSize)
+							return
+						} else if mbr.Particiones[j].PartStatus == 73 {
+							tt2 := startSiguiente + mbr.Particiones[j].PartSize
+							if tt <= tt2 {
+								mbr.Particiones[i].PartSize = tamañoFuturo
+								mbr.Particiones[j].PartStart = 0
+								mbr.Particiones[j].PartSize = 0
+								mensajeCreado(path, nombreParticion, mbr.Particiones[i].PartSize-add, mbr.Particiones[i].PartSize)
+								return
+							}
+						} else {
+							fmt.Println("No hay suficiente espacio para añadir a la partición")
+							return
+						}
+					}
+
+				} else {
+					tt := mbr.Particiones[i].PartStart + tamañoFuturo
+					if tt <= mbr.MbrTam {
+						mbr.Particiones[i].PartSize = tamañoFuturo
+						mensajeCreado(path, nombreParticion, mbr.Particiones[i].PartSize-add, mbr.Particiones[i].PartSize)
+						return
+					}
+				}
+			}
+			fmt.Println(colorYellow, "******************************************************")
+			fmt.Println(colorYellow, "No hay suficiente espacio para añadir a la partición")
+			fmt.Println(colorYellow, "******************************************************")
+			return
+		}
+	}
+	fmt.Println(colorYellow, "***************************************")
+	fmt.Println(colorYellow, "No existe una partición con ese nombre")
+	fmt.Println(colorYellow, "***************************************")
+	return
+
+}
+
+func mensajeCreado(path string, nombreParticion string, antes int64, despues int64) {
+	EscribirMBR(path)
+	fmt.Println(colorYellow, "******************************************************")
+	fmt.Println(colorYellow, " Se ha añadido el espacio a la partición")
+	fmt.Println(colorYellow, "******************************************************")
+	fmt.Println(" Nombre de la partición: " + nombreParticion)
+	fmt.Printf("%s%d%s", " Tamaño anterior de la partición: ", antes, " bytes\n")
+	fmt.Printf("%s%d%s", " Tamaño actual de la partición: ", despues, " bytes\n")
+	fmt.Println(colorYellow, "******************************************************")
 }
 
 //EliminarParticion este metodo realiza la eliminación de una partición
@@ -798,7 +881,7 @@ func EliminarParticion(path string, name string, tipo string) {
 
 	for i := 0; i < len(mbr.Particiones); i++ {
 		nombreParticion := ""
-		//Este ciclo forma el nombre de la partición logica
+		//Este ciclo forma el nombre de la partición
 		for j := 0; j < len(mbr.Particiones[i].PartName); j++ {
 			if mbr.Particiones[i].PartName[j] != 0 {
 				nombreParticion += string(rune(mbr.Particiones[i].PartName[j]))
@@ -810,7 +893,7 @@ func EliminarParticion(path string, name string, tipo string) {
 		// Verifica si está en la partición
 		if name == nombreParticion {
 			var nuevoNombre [16]byte
-			tt := mbr.Particiones[i].PartFit
+			tt := mbr.Particiones[i].PartType
 			mbr.Particiones[i].PartName = nuevoNombre
 			mbr.Particiones[i].PartStatus = 73
 			mbr.Particiones[i].PartType = 0
@@ -822,6 +905,7 @@ func EliminarParticion(path string, name string, tipo string) {
 				EscribirMBR(path)
 				mensajeEliminar(int64(ss), name, "Parcial", string(rune(tt)))
 			} else {
+				EscribirMBR(path)
 				EliminacionFULLP(mbr.Particiones[i].PartStart, path, mbr.Particiones[i].PartSize)
 				mensajeEliminar(int64(ss), name, "Total", string(rune(tt)))
 			}
@@ -841,7 +925,7 @@ func EliminarParticion(path string, name string, tipo string) {
 func mensajeEliminar(ss int64, name string, tipo string, tipo2 string) {
 	fmt.Println(colorRed, "***Información de partición eliminada***")
 	fmt.Println(" Nombre de la partición: " + name)
-	fmt.Printf("%s%d%s", "Tamaño de la partición: ", ss, "\n")
+	fmt.Printf("%s%d%s", " Tamaño de la partición: ", ss, "\n")
 	fmt.Println(" Tipo de partición: " + tipo2)
 	fmt.Println(" Tipo de eliminación: " + tipo)
 	fmt.Println(colorRed, "****************************************")
@@ -865,6 +949,7 @@ func BuscarEliminarLogica(name string, path string, tipo string) {
 			EscribirEBR(ebr.PartStart, path)
 			mensajeEliminar(ss, name, "Parcial", "Lógica")
 		} else {
+			EscribirMBR(path)
 			EliminacionFULLP(ebr.PartStart, path, ebr.PartSize)
 			mensajeEliminar(ss, name, "Total", "Lógica")
 		}
@@ -882,6 +967,7 @@ func BuscarEliminarLogica(name string, path string, tipo string) {
 				EscribirEBR(ebr.PartStart, path)
 				mensajeEliminar(ss, name, "Parcial", "Lógica")
 			} else {
+				EscribirMBR(path)
 				EliminacionFULLP(ebr.PartStart, path, ebr.PartSize)
 				mensajeEliminar(ss, name, "Total", "Lógica")
 			}
@@ -1154,7 +1240,7 @@ func PrimerAjuste(tam int64) (int64, int) {
 			if !mbr.Particiones[i].PartDelete && i < 3 {
 				mbr.Particiones[i+1].PartStart = mbr.Particiones[i].PartStart + tam + 1
 				mbr.Particiones[i+1].PartSize = mbr.MbrTam - int64(unsafe.Sizeof(mbr)) - mbr.MbrRecorrido
-				fmt.Printf("%d", (mbr.Particiones[i+1].PartSize / 1024 / 1024))
+
 			}
 			return mbr.Particiones[i].PartStart, i
 		}
