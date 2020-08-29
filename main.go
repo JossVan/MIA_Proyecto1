@@ -850,8 +850,7 @@ func AgregarOQuitar(path string, add int64, name string, unidades int64) {
 									}
 									mbr.Particiones[i].PartSize = tamañoFuturo
 									mbr.Particiones[j].PartStart = mbr.Particiones[i].PartStart + mbr.Particiones[i].PartSize + 1
-									mbr.Particiones[j].PartSize = tt2 - tt
-									mbr.Particiones[j].PartUnida = true
+									mbr.Particiones[j].PartSize = tt2 - tt - 1
 									mensajeCreado(path, nombreParticion, mbr.Particiones[i].PartSize-add, mbr.Particiones[i].PartSize)
 									return
 								}
@@ -1500,10 +1499,10 @@ func graphic(path string) {
 	}
 	com1 := "dot"
 	com2 := "-Tpng"
-	com3 := "dir"
+	com3 := dir
 	com4 := "-o"
 	com5 := dd + "MBR.png"
-	exec.Command(com1, com2, com3, com4, com5)
+	exec.Command(com1, com2, com3, com4, com5).Output()
 	fmt.Println(colorGreen, "Success")
 }
 func existeError(err error) bool {
@@ -1598,7 +1597,7 @@ func GraficarDisco(path string) {
 				}
 
 			} else {
-				if mbr.Particiones[i].PartUnida == false {
+				if mbr.Particiones[i].PartUnida == false && mbr.Particiones[i].PartSize != 0 {
 					if i != 0 {
 						cadena += "|"
 					}
@@ -1614,10 +1613,10 @@ func GraficarDisco(path string) {
 		}
 		com1 := "dot"
 		com2 := "-Tpng"
-		com3 := "dir"
+		com3 := dir
 		com4 := "-o"
 		com5 := dd + "disk.png"
-		exec.Command(com1, com2, com3, com4, com5)
+		exec.Command(com1, com2, com3, com4, com5).Output()
 		fmt.Println(colorGreen, "Success")
 	}
 }
