@@ -894,19 +894,28 @@ func AgregarOQuitarLogicas(path string, add int64, name string, unidades int64) 
 		start := BuscarExtendida()
 		if start != -1 {
 			ebr = ExtraerEBR(path, start)
-			nombreParticion := ""
-			//Este ciclo forma el nombre de la partición
-			for j := 0; j < len(ebr.PartName); j++ {
-
-				if ebr.PartName[j] != 0 {
-					nombreParticion += string(rune(ebr.PartName[j]))
-				} else {
-					break
-				}
-			}
-			//final
+			nombreParticion := Nombres(ebr.PartName)
 			if nombreParticion == name {
+				if add < 0 {
+					if ebr.PartSize > (-1 * add) {
+						tamañofuturo := ebr.PartSize + add
+						ebr.PartSize = tamañofuturo
+						if ebr.PartNext != -1 {
+							ebr = ExtraerEBR(path, ebr.PartNext)
+							EliminacionFULLP(ebr.PartStart, path, int64(unsafe.Sizeof(ebr)))
+							ebr.PartStart += add
+							EscribirEBR(ebr.PartStart, path)
+						}
+					} else {
+						fmt.Println(colorYellow, "*************************INFORMACIÓN**************************")
+						fmt.Println(colorYellow, "No se puede reducir la partición, la partición es muy pequeña!")
+						fmt.Println(colorYellow, "**************************************************************")
+					}
+				} else {
+					//tamañofuturo := ebr.PartSize + add
+					//posicion := ebr.PartStart + tamañofuturo
 
+				}
 			}
 
 		}
@@ -916,7 +925,7 @@ func AgregarOQuitarLogicas(path string, add int64, name string, unidades int64) 
 func mensajeCreado(path string, nombreParticion string, antes int64, despues int64) {
 	EscribirMBR(path)
 	fmt.Println(colorYellow, "******************************************************")
-	fmt.Println(colorYellow, " Se ha añadido el espacio a la partición")
+	fmt.Println(colorYellow, " Se ha implementado el comando add a la partición")
 	fmt.Println(colorYellow, "******************************************************")
 	fmt.Println(" Nombre de la partición: " + nombreParticion)
 	fmt.Printf("%s%d%s", " Tamaño anterior de la partición: ", antes, " bytes\n")
@@ -1000,7 +1009,8 @@ func BuscarEliminarLogica(name string, path string, tipo string) {
 			mensajeEliminar(ss, name, "Parcial", "Lógica")
 		} else {
 			EscribirEBR(ebr.PartStart, path)
-			EliminacionFULLP(ebr.PartStart, path, ebr.PartSize)
+			empieza := ebr.PartStart + int64(unsafe.Sizeof(ebr))
+			EliminacionFULLP(empieza, path, ebr.PartSize)
 			mensajeEliminar(ss, name, "Total", "Lógica")
 		}
 		return
@@ -1011,26 +1021,17 @@ func BuscarEliminarLogica(name string, path string, tipo string) {
 		nombre = Nombres(ebr.PartName)
 		if nombre == name {
 			ss := ebr.PartSize
-			//Los punteros del ebr
-			/*	previa := ebr.PartPrevious
-				NewNext := ebr.PartNext*/
-			//	Borrar info del ebr que se va a eliminar
 			var nuevoNombre [16]byte
 			ebr.PartName = nuevoNombre
 			ebr.PartFit = 0
 			ebr.PartStatus = 73
 			ebr.PartDelete = true
-			//Se accede al ebr anterior para cambiar puntero
-			/*	EscribirEBR(ebr.PartStart, path)
-				ebr = ExtraerEBR(path, previa)
-				ebr.PartNext = NewNext
-				EscribirEBR(ebr.PartStart, path)
-				ebr = ExtraerEBR(path, prox)*/
 			EscribirEBR(ebr.PartStart, path)
 			if tipo == "fast" {
 				mensajeEliminar(ss, name, "Parcial", "Lógica")
 			} else {
-				EliminacionFULLP(ebr.PartStart, path, ebr.PartSize)
+				empieza := ebr.PartStart + int64(unsafe.Sizeof(ebr))
+				EliminacionFULLP(empieza, path, ebr.PartSize)
 				mensajeEliminar(ss, name, "Total", "Lógica")
 			}
 			return
@@ -1356,34 +1357,8 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 			copy(ebr.PartName[:], name)
 			ebr.PartSize = size
 			ebr.PartStatus = 65
-			if int64(Rest) >= int64(tamEBR) {
-				ebr.PartNext = startNew
-				MensajeConfirmacion()
-				//fmt.Println(ebr)
-				EscribirEBR(ebr.PartStart, path)
-				CrearEBR(startNew, Rest, ebr.PartStart)
-				EscribirEBR(startNew, path)
-			} else {
-				fmt.Println(ebr)
-				MensajeConfirmacion()
-				EscribirEBR(ebr.PartStart, path)
-			}
-			return
-		}
-	}
-	for ebr.PartNext != -1 {
-		prox := ebr.PartNext
-		ebr = ExtraerEBR(path, prox)
-		nombreParticion := Nombres(ebr.PartName)
-		if nombreParticion != name {
-			if ebr.PartSize >= size && ebr.PartStatus == 73 {
-				empiezo := ebr.PartStart
-				Rest := ebr.PartSize - size
-				startNew := empiezo + size + 1
-				ebr.PartFit = fit
-				copy(ebr.PartName[:], name)
-				ebr.PartSize = size
-				ebr.PartStatus = 65
+
+			if ebr.PartNext == -1 {
 				if int64(Rest) >= int64(tamEBR) {
 					ebr.PartNext = startNew
 					MensajeConfirmacion()
@@ -1394,11 +1369,36 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 					MensajeConfirmacion()
 					EscribirEBR(ebr.PartStart, path)
 				}
-				/*	if ebr.PartDelete == true {
-					ebr = ExtraerEBR(path, ebr.PartPrevious)
-					ebr.PartNext = empiezo
-					EscribirEBR(ebr.PartStart, path)
-				}*/
+			}
+			return
+		}
+	}
+	for ebr.PartNext != -1 {
+		prox := ebr.PartNext
+		ebr = ExtraerEBR(path, prox)
+		nombreParticion := Nombres(ebr.PartName)
+		if nombreParticion == "" {
+			if ebr.PartSize >= size && ebr.PartStatus == 73 {
+				empiezo := ebr.PartStart
+				Rest := ebr.PartSize - size
+				startNew := empiezo + size + 1
+				ebr.PartFit = fit
+				copy(ebr.PartName[:], name)
+				ebr.PartSize = size
+				ebr.PartStatus = 65
+
+				if ebr.PartNext == -1 {
+					if int64(Rest) >= int64(tamEBR) {
+						ebr.PartNext = startNew
+						MensajeConfirmacion()
+						EscribirEBR(ebr.PartStart, path)
+						CrearEBR(startNew, Rest, ebr.PartStart)
+						EscribirEBR(startNew, path)
+					} else {
+						MensajeConfirmacion()
+						EscribirEBR(ebr.PartStart, path)
+					}
+				}
 				return
 			}
 		} else {
