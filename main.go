@@ -897,14 +897,16 @@ func AgregarOQuitarLogicas(path string, add int64, name string, unidades int64) 
 					if ebr.PartSize > (-1 * add) {
 						tamañofuturo := ebr.PartSize + add
 						ebr.PartSize = tamañofuturo
-						if ebr.PartNext != -1 {
+						EscribirEBR(ebr.PartStart, path)
+						mensajeCreado(path, nombreParticion, tamañofuturo-add, tamañofuturo)
+						/*	if ebr.PartNext != -1 {
 							ebr = ExtraerEBR(path, ebr.PartNext)
 							EliminacionFULLP(ebr.PartStart, path, int64(unsafe.Sizeof(ebr)))
 							ebr.PartStart += add
 							EscribirEBR(ebr.PartStart, path)
 							mensajeCreado(path, nombreParticion, tamañofuturo-add, tamañofuturo)
 							return
-						}
+						}*/
 					} else {
 						fmt.Println(colorYellow, "*************************INFORMACIÓN**************************")
 						fmt.Println(colorYellow, "No se puede reducir la partición, la partición es muy pequeña!")
