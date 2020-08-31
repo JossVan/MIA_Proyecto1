@@ -568,7 +568,8 @@ func readNextBytes(file *os.File, number int) []byte {
 
 	_, err := file.Read(bytes)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(colorRed, "No hay bytes que leer")
+		return bytes
 	}
 
 	return bytes
@@ -877,18 +878,14 @@ func AgregarOQuitar(path string, add int64, name string, unidades int64) {
 				return
 			}
 		}
-		fmt.Println(colorYellow, "***************************************")
-		fmt.Println(colorYellow, "No existe una partición con ese nombre")
-		fmt.Println(colorYellow, "***************************************")
-		return
-
+		AgregarOQuitarLogicas(path, add, name, unidades)
 	}
 }
 
 //AgregarOQuitarLogicas este metodo añade o quita espacio a las lógicas
 func AgregarOQuitarLogicas(path string, add int64, name string, unidades int64) {
 	b := false
-	add = add * unidades
+	//add = add * unidades
 	mbr, b = LeerMBR(path)
 	if b == true {
 		start := BuscarExtendida()
@@ -905,17 +902,85 @@ func AgregarOQuitarLogicas(path string, add int64, name string, unidades int64) 
 							EliminacionFULLP(ebr.PartStart, path, int64(unsafe.Sizeof(ebr)))
 							ebr.PartStart += add
 							EscribirEBR(ebr.PartStart, path)
+							mensajeCreado(path, nombreParticion, tamañofuturo-add, tamañofuturo)
+							return
 						}
 					} else {
 						fmt.Println(colorYellow, "*************************INFORMACIÓN**************************")
 						fmt.Println(colorYellow, "No se puede reducir la partición, la partición es muy pequeña!")
 						fmt.Println(colorYellow, "**************************************************************")
+						return
 					}
 				} else {
-					//tamañofuturo := ebr.PartSize + add
-					//posicion := ebr.PartStart + tamañofuturo
+
+					tamañofuturo := ebr.PartSize + add
+					posicion := ebr.PartStart + tamañofuturo
+					if ebr.PartNext != -1 {
+						if posicion < ebr.PartNext {
+							ebr.PartSize += add
+							EscribirEBR(ebr.PartStart, path)
+							mensajeCreado(path, nombreParticion, tamañofuturo-add, tamañofuturo)
+						} else {
+							ebrSig := ExtraerEBR(path, ebr.PartNext)
+							total := ebrSig.PartStart + ebrSig.PartSize
+							if ebrSig.PartStatus == 73 {
+								if posicion <= total {
+									ebr.PartSize = ebr.PartSize + add
+									tam := ebr.PartStart + ebr.PartSize + 2
+									ebrSig = ExtraerEBR(path, ebr.PartNext)
+									if ebrSig.PartNext == tam {
+										ebr.PartNext = ebrSig.PartNext
+										EscribirEBR(ebr.PartStart, path)
+									} else {
+										ebr.PartNext = ebrSig.PartStart + add
+										EscribirEBR(ebr.PartStart, path)
+										ebr = ebrSig
+										ebr.PartSize = ebr.PartSize - add
+										EliminacionFULLP(ebr.PartStart, path, int64(unsafe.Sizeof(ebr)))
+										ebr.PartStart = ebrSig.PartStart + add
+										EscribirEBR(ebr.PartStart, path)
+									}
+									mensajeCreado(path, nombreParticion, tamañofuturo-add, tamañofuturo)
+								} else {
+									for ebrSig.PartNext != -1 {
+										ebrSig = ExtraerEBR(path, ebrSig.PartNext)
+										if ebrSig.PartStatus == 73 {
+											total := ebrSig.PartStart + ebrSig.PartSize - int64(unsafe.Sizeof(ebrSig))
+											if posicion < total {
+												ebr.PartSize += add
+												EscribirEBR(ebr.PartStart, path)
+												tam := ebr.PartStart + ebr.PartSize + 1
+												ebr = ebrSig
+												ebr.PartStart = tam
+												EscribirEBR(ebr.PartStart, path)
+												mensajeCreado(path, nombreParticion, tamañofuturo-add, tamañofuturo)
+												return
+											}
+										} else {
+											fmt.Println(colorYellow, "*************************INFORMACIÓN**************************")
+											fmt.Println(colorYellow, "No se puede reducir la partición, la partición es muy pequeña!")
+											fmt.Println(colorYellow, "**************************************************************")
+											return
+										}
+									}
+								}
+
+							} else {
+								fmt.Println(colorYellow, "*************************INFORMACIÓN**************************")
+								fmt.Println(colorYellow, "No se puede reducir la partición, la partición es muy pequeña!")
+								fmt.Println(colorYellow, "**************************************************************")
+								return
+							}
+						}
+
+					}
 
 				}
+			} else {
+				fmt.Println(colorYellow, "*************************INFORMACIÓN**************************")
+				fmt.Println(colorYellow, "El nombre de la partición no está registrado en el disco!")
+				fmt.Println(colorYellow, "**************************************************************")
+				return
 			}
 
 		}
@@ -1357,7 +1422,6 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 			copy(ebr.PartName[:], name)
 			ebr.PartSize = size
 			ebr.PartStatus = 65
-
 			if ebr.PartNext == -1 {
 				if int64(Rest) >= int64(tamEBR) {
 					ebr.PartNext = startNew
@@ -1368,7 +1432,11 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 				} else {
 					MensajeConfirmacion()
 					EscribirEBR(ebr.PartStart, path)
+
 				}
+			} else {
+				MensajeConfirmacion()
+				EscribirEBR(ebr.PartStart, path)
 			}
 			return
 		}
@@ -1377,7 +1445,7 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 		prox := ebr.PartNext
 		ebr = ExtraerEBR(path, prox)
 		nombreParticion := Nombres(ebr.PartName)
-		if nombreParticion == "" {
+		if nombreParticion != name {
 			if ebr.PartSize >= size && ebr.PartStatus == 73 {
 				empiezo := ebr.PartStart
 				Rest := ebr.PartSize - size
@@ -1398,12 +1466,12 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 						MensajeConfirmacion()
 						EscribirEBR(ebr.PartStart, path)
 					}
+				} else {
+					MensajeConfirmacion()
+					EscribirEBR(ebr.PartStart, path)
 				}
 				return
 			}
-		} else {
-			fmt.Println(colorYellow, "Ya hay una partición lógica con este nombre!")
-			return
 		}
 	}
 	fmt.Println(colorYellow, "No hay más espacio en la partición extendida")
@@ -1578,7 +1646,7 @@ func GraficarDisco(path string) {
 						}
 
 						siguiente := ebr.PartNext
-						for siguiente != -1 {
+						for siguiente != -1 && siguiente != 0 {
 							cadena += "|"
 							ebr = ExtraerEBR(path, siguiente)
 							nombre = Nombres(ebr.PartName)
