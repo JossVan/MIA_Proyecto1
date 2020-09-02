@@ -31,6 +31,9 @@ var mbr MBR
 var ebr EBR
 var contador = 0
 
+// ListDiscos inicio de la lista
+var ListDiscos ListaDisco
+
 func colorcitos() {
 	colorRed = "\033[31m"
 	colorGreen = "\033[32m"
@@ -41,6 +44,25 @@ func colorcitos() {
 	colorBlanco = "\033[37m"
 }
 func main() {
+
+	/*	dir := "/home/josselyn/disco.dsk"
+		nom := "nombre1"
+		AgregarDisco(dir, nom)
+		fmt.Println(ListDiscos.inicio)
+		AgregarDisco(dir, "nombre2")
+		AgregarDisco(dir, "nombre3")
+		AgregarDisco(dir, "nombre4")
+		aa := ListDiscos.inicio
+		for aa != nil {
+			fmt.Println(aa.Nombre)
+			fmt.Println(string(rune(aa.Letra)))
+			lista := aa.listaParticiones.inicio
+			for lista != nil {
+				fmt.Println(lista.nombreMontada)
+				lista = lista.siguiente
+			}
+			aa = aa.siguiente
+		}*/
 	fmt.Print(colorBlanco, "Introduzca un comando----:: ")
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
@@ -388,6 +410,8 @@ func AnalizarLineaComando(cadena string) {
 	case "graficar":
 		GraficarDisco(arreglo[1])
 		break
+	case "mount":
+		break
 	default:
 		fmt.Println(colorYellow, "Comandos no reconocidos...")
 	}
@@ -590,6 +614,7 @@ type MBR struct {
 	MbrDiskID        uint8
 	MbrRecorrido     int64
 	Particiones      [4]particion
+	MbrActivas       byte
 }
 
 //particion información de cada partición en el archivo
@@ -1101,11 +1126,10 @@ func EliminarParticion(path string, name string, tipo string) {
 				mbr.Particiones[i].PartFit = 0
 				mbr.Particiones[i].PartPartition = false
 				mbr.Particiones[i].PartDelete = true
+				mbr.MbrActivas--
 				if i < 3 {
 					ini1 := mbr.Particiones[i+1].PartStart
 					ini2 := mbr.Particiones[i].PartStart
-					/*	tami := mbr.Particiones[i].PartSize
-						fmt.Printf("%d", tami)*/
 					mbr.Particiones[i].PartSize = ini1 - ini2 - 1
 				} else {
 					mbr.Particiones[i].PartSize = mbr.MbrTam - mbr.Particiones[i].PartStart
@@ -1174,31 +1198,13 @@ func BuscarEliminarLogica(name string, path string, tipo string) {
 		}
 		return
 	}
-	for ebr.PartNext != -1 {
-		prox := ebr.PartNext
-		ebr = ExtraerEBR(path, prox)
-		nombre = Nombres(ebr.PartName)
-		if nombre == name {
-			ss := ebr.PartSize
-			var nuevoNombre [16]byte
-			ebr.PartName = nuevoNombre
-			ebr.PartFit = 0
-			ebr.PartStatus = 73
-			ebr.PartDelete = true
-			tamreal := ebr.PartNext - ebr.PartStart
-			if tipo == "fast" {
-				ebr.PartSize = tamreal
-				EscribirEBR(ebr.PartStart, path)
-				mensajeEliminar(ss, name, "Parcial", "Lógica")
-			} else {
-				ebr.PartSize = tamreal
-				empieza := ebr.PartStart + int64(unsafe.Sizeof(ebr))
-				EliminacionFULLP(empieza, path, ebr.PartSize)
-				EscribirEBR(ebr.PartStart, path)
-				mensajeEliminar(ss, name, "Total", "Lógica")
-			}
-			return
-		}
+	if ebr.PartNext != -1 {
+		ebr = ExtraerEBR(path, ebr.PartNext)
+		BuscarEliminarLogica(name, path, tipo)
+	} else {
+		fmt.Println(colorYellow, "************************Mensaje**************************")
+		fmt.Println(colorYellow, "No existe el nombre de la partición, imposible eliminarla.")
+		fmt.Println(colorYellow, "**********************************************************")
 	}
 }
 
@@ -1456,19 +1462,32 @@ func CrearParticion(path string, name string, tipo string, numero int) {
 
 //PrimerAjuste este metodo devuelve la posicion inicial del primer espacio que encuentre
 func PrimerAjuste(tam int64) (int64, int) {
+	if mbr.MbrActivas == 4 {
+		return 0, -1
+	}
 	for i := 0; i < 4; i++ {
 		TAM := mbr.Particiones[i].PartSize
-		if !mbr.Particiones[i].PartPartition && TAM >= tam {
-			mbr.Particiones[i].PartSize = tam
-			mbr.MbrRecorrido += mbr.Particiones[i].PartSize
+		if !mbr.Particiones[i].PartPartition {
+			if TAM >= tam {
+				mbr.Particiones[i].PartSize = tam
+				mbr.MbrRecorrido += mbr.Particiones[i].PartSize
 
-			if mbr.Particiones[i].PartDelete == false && i < 3 {
-				mbr.Particiones[i+1].PartStart = mbr.Particiones[i].PartStart + tam + 1
-				mbr.Particiones[i+1].PartSize = mbr.MbrTam - int64(unsafe.Sizeof(mbr)) - mbr.MbrRecorrido
+				if mbr.Particiones[i].PartDelete == false && i < 3 {
+					mbr.Particiones[i+1].PartStart = mbr.Particiones[i].PartStart + tam + 1
+					mbr.Particiones[i+1].PartSize = mbr.MbrTam - int64(unsafe.Sizeof(mbr)) - mbr.MbrRecorrido
+				}
+				mbr.MbrActivas++
+				return mbr.Particiones[i].PartStart, i
 			}
-			return mbr.Particiones[i].PartStart, i
 		}
 	}
+	/*	SizeSinParticionar := mbr.MbrTam - int64(unsafe.Sizeof(mbr))
+		for i := 0; i < 4; i++ {
+			SizeSinParticionar += mbr.Particiones[i].PartSize
+		}
+		if SizeSinParticionar >= tam {
+
+		}*/
 
 	fmt.Println(colorYellow, "No hay espacio en la partición")
 	return 0, -1
@@ -1792,4 +1811,128 @@ func GraficarDisco(path string) {
 		exec.Command(com1, com2, com3, com4, com5).Output()
 		fmt.Println(colorGreen, "Success")
 	}
+}
+
+//Mount monta una partición en la RAM
+func Mount(path string, nombreParticion string) {
+	EscribirMBR(path)
+	for i := 0; i < 4; i++ {
+		nombre := Nombres(mbr.Particiones[i].PartName)
+		if nombre == nombreParticion {
+
+		}
+	}
+}
+
+//NodoParticion este struct contiene los datos que va a tener la lista de particiones montadas
+type NodoParticion struct {
+	name          [16]byte
+	nombreMontada string
+	numero        int32
+	siguiente     *NodoParticion
+}
+
+//NodoDisco el nodo contendrá la lista de discos
+type NodoDisco struct {
+	path             string
+	Nombre           string
+	Letra            byte
+	mbr              MBR
+	ebr              EBR
+	listaParticiones ListaParticion
+	siguiente        *NodoDisco
+}
+
+//ListaDisco este struct guarda los atributos de la lista disco
+type ListaDisco struct {
+	inicio *NodoDisco
+}
+
+//ListaParticion este struct guarda los atributos de la lista
+type ListaParticion struct {
+	inicio *NodoParticion
+}
+
+//ListaDiscoVacia devuelve verdadero si la lista está vacía
+func ListaDiscoVacia() bool {
+	if ListDiscos.inicio == nil {
+		return true
+	}
+	return false
+}
+
+//AgregarDisco este metodo mete el disco a la lista
+func AgregarDisco(path string, nombreParticion string, tipo string) {
+	if ListaDiscoVacia() {
+		var ini NodoDisco = NodoDisco{}
+		ListDiscos.inicio = &ini
+		ListDiscos.inicio.Letra = 97
+		array := strings.Split(path, "/")
+		nombre := array[len(array)-1]
+		ListDiscos.inicio.Nombre = nombre
+		ListDiscos.inicio.path = path
+		//Llenar lista de particion
+		var listParticion ListaParticion
+		LeerMBR(path)
+		ListDiscos.inicio.mbr = mbr
+		var ini2 NodoParticion = NodoParticion{}
+		listParticion.inicio = &ini2
+		listParticion.inicio.numero = 1
+		copy(listParticion.inicio.name[:], nombreParticion)
+		listParticion.inicio.nombreMontada = "dva1"
+		ListDiscos.inicio.listaParticiones = listParticion
+		ListDiscos.inicio.siguiente = nil
+	} else {
+		array := strings.Split(path, "/")
+		nombre := array[len(array)-1]
+
+		var auxiliar *NodoDisco
+		auxiliar = ListDiscos.inicio
+		a1 := false
+		for auxiliar != nil {
+			if auxiliar.Nombre == nombre {
+				PosListaParticion(auxiliar.listaParticiones, nombreParticion, string(rune(auxiliar.Letra)))
+				a1 = true
+				break
+			}
+		}
+
+		if !a1 {
+			var auxiliar2 *NodoDisco
+			auxiliar2 = ListDiscos.inicio
+			for auxiliar2.siguiente != nil {
+				auxiliar2 = auxiliar2.siguiente
+			}
+
+			auxiliar2.siguiente.Letra = auxiliar2.Letra + 1
+			array := strings.Split(path, "/")
+			nombre := array[len(array)-1]
+			auxiliar2.siguiente.Nombre = nombre
+			auxiliar2.siguiente.path = path
+			//Llenar lista de particion
+			var listParticion ListaParticion
+			LeerMBR(path)
+			auxiliar2.siguiente.mbr = mbr
+			listParticion.inicio.numero = 1
+			copy(listParticion.inicio.name[:], nombreParticion)
+			listParticion.inicio.nombreMontada = "dv" + string(rune(auxiliar2.siguiente.Letra+1)) + "1"
+			ListDiscos.inicio.listaParticiones = listParticion
+			ListDiscos.inicio.siguiente = nil
+
+		}
+	}
+}
+
+//PosListaParticion agrega un nuevo elemento a la lista particion
+func PosListaParticion(Lista ListaParticion, nombreparticion string, letra string) {
+	var auxiliar *NodoParticion
+	auxiliar = Lista.inicio
+	for auxiliar.siguiente != nil {
+		auxiliar = auxiliar.siguiente
+	}
+	ini := NodoParticion{}
+	auxiliar.siguiente = &ini
+	copy(auxiliar.siguiente.name[:], nombreparticion)
+	auxiliar.siguiente.numero = auxiliar.numero + 1
+	auxiliar.siguiente.nombreMontada = "vd" + letra + strconv.Itoa(int(auxiliar.siguiente.numero))
 }
