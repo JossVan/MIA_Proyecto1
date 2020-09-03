@@ -573,14 +573,13 @@ func CrearDisco(nombre string, tam int64, unidad byte, ruta string) {
 		binary.Write(&binario, binary.BigEndian, &cero)
 		escribirBytes(file, binario.Bytes())
 
-		file.Seek(int64(size), 0)
+		file.Seek(int64(size), 0) // 0 inicio del archivo, pos 0, 1->donde se quedo, 2->al final del archivo
 
 		var binario2 bytes.Buffer
 		binary.Write(&binario2, binary.BigEndian, &cero)
 		escribirBytes(file, binario2.Bytes())
-
 		file.Seek(0, 0)
-		CrearMBR(int64(size), file)
+		CrearMBR(int64(size)+1, file)
 		duracion()
 		fmt.Println(colorGreen, "*****Información del disco creado*****")
 		fmt.Println(colorGreen, "Nombre del disco: "+nombre)
@@ -657,6 +656,7 @@ func CrearMBR(mbrTam int64, file *os.File) {
 		t.Hour(), t.Minute(), t.Second())
 	copy(mbr.MbrFechaCreacion[:], fecha)
 	tamMBR := int64(unsafe.Sizeof(mbr))
+
 	mbr.Particiones[0].PartSize = mbr.MbrTam - tamMBR
 	mbr.Particiones[0].PartStart = tamMBR
 	//agrega el mbr al disco
@@ -1126,22 +1126,18 @@ func EliminarParticion(path string, name string, tipo string) {
 				mbr.Particiones[i].PartFit = 0
 				mbr.Particiones[i].PartPartition = false
 				mbr.Particiones[i].PartDelete = true
+				tamm := mbr.Particiones[i].PartSize
+				st := mbr.Particiones[i].PartStart
+				mbr.Particiones[i].PartSize = 0
+				mbr.Particiones[i].PartStart = 0
 				mbr.MbrActivas--
-				if i < 3 {
-					ini1 := mbr.Particiones[i+1].PartStart
-					ini2 := mbr.Particiones[i].PartStart
-					mbr.Particiones[i].PartSize = ini1 - ini2 - 1
-				} else {
-					mbr.Particiones[i].PartSize = mbr.MbrTam - mbr.Particiones[i].PartStart
-				}
-				ss := int(mbr.Particiones[i].PartSize)
 				if strings.ToLower(tipo) == "fast" {
 					EscribirMBR(path)
-					mensajeEliminar(int64(ss), name, "Parcial", string(rune(tt)))
+					mensajeEliminar(tamm, name, "Parcial", string(rune(tt)))
 				} else {
 					EscribirMBR(path)
-					EliminacionFULLP(mbr.Particiones[i].PartStart, path, mbr.Particiones[i].PartSize)
-					mensajeEliminar(int64(ss), name, "Total", string(rune(tt)))
+					EliminacionFULLP(st, path, tamm)
+					mensajeEliminar(tamm, name, "Total", string(rune(tt)))
 				}
 				return
 			}
@@ -1181,14 +1177,14 @@ func BuscarEliminarLogica(name string, path string, tipo string) {
 		ebr.PartDelete = true
 		if tipo == "fast" {
 			if ebr.PartNext != -1 {
-				tamreal := ebr.PartNext - ebr.PartStart - 1
+				tamreal := ebr.PartNext - ebr.PartStart
 				ebr.PartSize = tamreal
 			}
 			EscribirEBR(ebr.PartStart, path)
 			mensajeEliminar(ss, name, "Parcial", "Lógica")
 		} else {
 			if ebr.PartNext != -1 {
-				tamreal := ebr.PartNext - ebr.PartStart - 1
+				tamreal := ebr.PartNext - ebr.PartStart
 				ebr.PartSize = tamreal
 			}
 			EscribirEBR(ebr.PartStart, path)
@@ -1370,6 +1366,7 @@ func CrearParticionNueva(size int64, unidad int64, path string, tipo string, fit
 
 			InformacionParticion(name, tipo, fit, size, s, part, path)
 			CrearParticion(path, name, tipo, part)
+
 		}
 
 	}
@@ -1393,7 +1390,6 @@ func EscribirEBR(start int64, path string) {
 	files.Seek(start, 0)
 	tamEBR := int64(unsafe.Sizeof(ebr))
 	files.Seek(tamEBR, 1)
-
 	var b3 bytes.Buffer
 	binary.Write(&b3, binary.BigEndian, &ebr)
 	escribirBytes(files, b3.Bytes())
@@ -1462,6 +1458,7 @@ func CrearParticion(path string, name string, tipo string, numero int) {
 
 //PrimerAjuste este metodo devuelve la posicion inicial del primer espacio que encuentre
 func PrimerAjuste(tam int64) (int64, int) {
+
 	if mbr.MbrActivas == 4 {
 		return 0, -1
 	}
@@ -1472,8 +1469,8 @@ func PrimerAjuste(tam int64) (int64, int) {
 				mbr.Particiones[i].PartSize = tam
 				mbr.MbrRecorrido += mbr.Particiones[i].PartSize
 
-				if mbr.Particiones[i].PartDelete == false && i < 3 {
-					mbr.Particiones[i+1].PartStart = mbr.Particiones[i].PartStart + tam + 1
+				if i < 3 && mbr.Particiones[i].PartDelete == false {
+					mbr.Particiones[i+1].PartStart = mbr.Particiones[i].PartStart + tam
 					mbr.Particiones[i+1].PartSize = mbr.MbrTam - int64(unsafe.Sizeof(mbr)) - mbr.MbrRecorrido
 				}
 				mbr.MbrActivas++
@@ -1481,16 +1478,64 @@ func PrimerAjuste(tam int64) (int64, int) {
 			}
 		}
 	}
-	/*	SizeSinParticionar := mbr.MbrTam - int64(unsafe.Sizeof(mbr))
-		for i := 0; i < 4; i++ {
-			SizeSinParticionar += mbr.Particiones[i].PartSize
-		}
-		if SizeSinParticionar >= tam {
-
-		}*/
+	OrdenarArregloParticion()
+	return Ajustar(tam, int64(unsafe.Sizeof(mbr)), 0)
 
 	fmt.Println(colorYellow, "No hay espacio en la partición")
 	return 0, -1
+}
+
+//Ajustar pruebas
+func Ajustar(tam int64, Inicio int64, i int) (int64, int) {
+
+	if mbr.Particiones[i].PartStart != 0 {
+		if mbr.Particiones[i].PartStart > Inicio {
+			libre := mbr.Particiones[i].PartStart - Inicio
+			if libre >= tam {
+				for a := 0; a < 4; a++ {
+					if mbr.Particiones[a].PartStart == 0 {
+						mbr.Particiones[a].PartStart = Inicio
+						mbr.Particiones[a].PartSize = tam
+						mbr.MbrActivas++
+						return mbr.Particiones[a].PartStart, a
+					}
+				}
+			}
+			Inicio = mbr.Particiones[i].PartStart + mbr.Particiones[i].PartSize
+			if (i + 1) != 3 {
+				return Ajustar(tam, Inicio, i+1)
+			}
+			libre = mbr.MbrTam - (mbr.Particiones[i+1].PartStart + mbr.Particiones[i+1].PartSize)
+			Inicio = mbr.Particiones[i+1].PartStart + mbr.Particiones[i+1].PartSize
+			if libre >= tam {
+				for a := 0; a < 4; a++ {
+					if mbr.Particiones[a].PartStart == 0 {
+						mbr.Particiones[a].PartStart = Inicio
+						mbr.Particiones[a].PartSize = tam
+						mbr.MbrActivas++
+						return mbr.Particiones[a].PartStart, a
+					}
+				}
+			}
+
+		}
+	} else {
+		return Ajustar(tam, Inicio, i+1)
+	}
+	return 0, -1
+}
+
+//OrdenarArregloParticion ordena el arreglo de particiones
+func OrdenarArregloParticion() {
+	for i := 0; i < len(mbr.Particiones); i++ {
+		for j := 0; j < len(mbr.Particiones)-1; j++ {
+			if mbr.Particiones[j].PartStart > mbr.Particiones[j+1].PartStart {
+				temp := mbr.Particiones[j]
+				mbr.Particiones[j] = mbr.Particiones[j+1]
+				mbr.Particiones[j+1] = temp
+			}
+		}
+	}
 }
 
 //BuscarExtendida este metodo busca la partición extendida para extraer su ebr
@@ -1534,7 +1579,7 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 	if nombreParticion != name {
 		if ebr.PartSize >= size && ebr.PartStatus == 73 {
 			Rest := ebr.PartSize - size
-			startNew := ebr.PartStart + size + 1
+			startNew := ebr.PartStart + size
 			ebr.PartFit = fit
 			copy(ebr.PartName[:], name)
 			ebr.PartSize = size
@@ -1566,7 +1611,7 @@ func CrearLogica(path string, size int64, name string, fit byte) {
 			if ebr.PartSize >= size && ebr.PartStatus == 73 {
 				empiezo := ebr.PartStart
 				Rest := ebr.PartSize - size
-				startNew := empiezo + size + 1
+				startNew := empiezo + size
 				ebr.PartFit = fit
 				copy(ebr.PartName[:], name)
 				ebr.PartSize = size
@@ -1731,73 +1776,41 @@ func GraficarDisco(path string) {
 		cadena += "node [shape=record];\n"
 		cadena += "disco[label=\"MBR&#92;nSize: " + strconv.Itoa(int(mbr.MbrTam))
 
-		for i := 0; i < len(mbr.Particiones); i++ {
+		OrdenarArregloParticion()
 
-			nombre := Nombres(mbr.Particiones[i].PartName)
-			if i == 0 {
-				cadena += "|"
+		Inicio := int64(unsafe.Sizeof(mbr))
 
-			}
-			if nombre != "" {
-				if i != 0 {
+		for i := 0; i < 4; i++ {
+			if mbr.Particiones[i].PartSize != 0 {
+				if mbr.Particiones[i].PartStart > Inicio {
 					cadena += "|"
-				}
-				if mbr.Particiones[i].PartType == byte('p') {
-					cadena += "Nombre: " + nombre + "&#92;n"
-					cadena += "Tipo: " + "Primaria" + "&#92;n"
-					cadena += "Size: " + strconv.Itoa(int(mbr.Particiones[i].PartSize)) + " bytes"
-				} else if mbr.Particiones[i].PartType == byte('e') {
-					cadena += "{"
-					cadena += "Nombre: " + nombre + "&#92;n"
-					cadena += "Tipo: " + "Extendida&#92;n"
-					cadena += "Size: " + strconv.Itoa(int(mbr.Particiones[i].PartSize)) + " bytes|{"
-					com := BuscarExtendida()
-					if com != -1 {
-						ebr = ExtraerEBR(path, com)
-						nombre := Nombres(ebr.PartName)
-						if nombre != "" {
-							cadena += "Nombre: " + nombre + "&#92;n"
-							cadena += "Size: " + strconv.Itoa(int(ebr.PartSize)) + "&#92;n"
-							cadena += "Tipo: Logica"
-						} else {
-							if ebr.PartSize != 0 {
-								cadena += "Libre&#92;nSize: " + strconv.Itoa(int(ebr.PartSize))
-							}
-						}
-
-						siguiente := ebr.PartNext
-						for siguiente != -1 && siguiente != 0 {
-
-							ebr = ExtraerEBR(path, siguiente)
-							nombre = Nombres(ebr.PartName)
-							if nombre != "" {
-								cadena += "|"
-								cadena += "Nombre: " + nombre + "&#92;n"
-								cadena += "Size: " + strconv.Itoa(int(ebr.PartSize)) + "&#92;n"
-								cadena += "Tipo: Logica"
-							} else {
-								if ebr.PartSize != 0 {
-									cadena += "|"
-									cadena += "Libre&#92;nSize: " + strconv.Itoa(int(ebr.PartSize))
-								}
-							}
-							siguiente = ebr.PartNext
-						}
-						cadena += "}}"
-
+					cadena += "Libre: "
+					disponible := mbr.Particiones[i].PartStart - Inicio
+					cadena += strconv.Itoa(int(disponible))
+					Inicio = mbr.Particiones[i].PartStart + mbr.Particiones[i].PartSize
+					i--
+				} else {
+					cadena += "|"
+					nombre := Nombres(mbr.Particiones[i].PartName)
+					if mbr.Particiones[i].PartType == byte('e') {
+						cadena += Grafextendida(path, i, nombre)
+					} else {
+						cadena += "Nombre: " + nombre + "&#92;n"
+						cadena += "Tipo: " + "Primaria" + "&#92;n"
+						cadena += "Size: " + strconv.Itoa(int(mbr.Particiones[i].PartSize))
 					}
-				}
 
-			} else {
-				if mbr.Particiones[i].PartUnida == false && mbr.Particiones[i].PartSize != 0 {
-					if i != 0 {
-						cadena += "|"
-					}
-					cadena += "Libre&#92;n"
-					cadena += "Size: " + strconv.Itoa(int(mbr.Particiones[i].PartSize)) + " bytes"
+					Inicio = mbr.Particiones[i].PartStart + mbr.Particiones[i].PartSize
 				}
 			}
 		}
+		if mbr.Particiones[3].PartStart != 0 {
+			libre := mbr.MbrTam - mbr.Particiones[3].PartStart - mbr.Particiones[3].PartSize
+			cadena += "|"
+			cadena += "Libre: "
+			cadena += strconv.Itoa(int(libre))
+		}
+
 		cadena += "\"];}"
 		errrr := ioutil.WriteFile(dir, []byte(cadena[:]), 0644)
 		if errrr != nil {
@@ -1811,6 +1824,51 @@ func GraficarDisco(path string) {
 		exec.Command(com1, com2, com3, com4, com5).Output()
 		fmt.Println(colorGreen, "Success")
 	}
+}
+
+//Grafextendida devuelve una cadena con el codigo para graficar particiones logicas
+func Grafextendida(path string, i int, nombre string) string {
+	cadena := ""
+	cadena += "{"
+	cadena += "Nombre: " + nombre + "&#92;n"
+	cadena += "Tipo: " + "Extendida&#92;n"
+	cadena += "Size: " + strconv.Itoa(int(mbr.Particiones[i].PartSize)) + " bytes|{"
+	com := BuscarExtendida()
+	if com != -1 {
+		ebr = ExtraerEBR(path, com)
+		nombre := Nombres(ebr.PartName)
+		if nombre != "" {
+			cadena += "Nombre: " + nombre + "&#92;n"
+			cadena += "Size: " + strconv.Itoa(int(ebr.PartSize)) + "&#92;n"
+			cadena += "Tipo: Logica"
+		} else {
+			if ebr.PartSize != 0 {
+				cadena += "Libre&#92;nSize: " + strconv.Itoa(int(ebr.PartSize))
+			}
+		}
+
+		siguiente := ebr.PartNext
+		for siguiente != -1 && siguiente != 0 {
+
+			ebr = ExtraerEBR(path, siguiente)
+			nombre = Nombres(ebr.PartName)
+			if nombre != "" {
+				cadena += "|"
+				cadena += "Nombre: " + nombre + "&#92;n"
+				cadena += "Size: " + strconv.Itoa(int(ebr.PartSize)) + "&#92;n"
+				cadena += "Tipo: Logica"
+			} else {
+				if ebr.PartSize != 0 {
+					cadena += "|"
+					cadena += "Libre&#92;nSize: " + strconv.Itoa(int(ebr.PartSize))
+				}
+			}
+			siguiente = ebr.PartNext
+		}
+		cadena += "}}"
+
+	}
+	return cadena
 }
 
 //Mount monta una partición en la RAM

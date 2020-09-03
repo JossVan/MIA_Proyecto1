@@ -1,0 +1,5 @@
+package contenido
+
+func graf() {
+
+}
