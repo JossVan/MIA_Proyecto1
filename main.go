@@ -44,25 +44,6 @@ func colorcitos() {
 	colorBlanco = "\033[37m"
 }
 func main() {
-
-	/*	dir := "/home/josselyn/disco.dsk"
-		nom := "nombre1"
-		AgregarDisco(dir, nom)
-		fmt.Println(ListDiscos.inicio)
-		AgregarDisco(dir, "nombre2")
-		AgregarDisco(dir, "nombre3")
-		AgregarDisco(dir, "nombre4")
-		aa := ListDiscos.inicio
-		for aa != nil {
-			fmt.Println(aa.Nombre)
-			fmt.Println(string(rune(aa.Letra)))
-			lista := aa.listaParticiones.inicio
-			for lista != nil {
-				fmt.Println(lista.nombreMontada)
-				lista = lista.siguiente
-			}
-			aa = aa.siguiente
-		}*/
 	fmt.Print(colorBlanco, "Introduzca un comando----:: ")
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
@@ -276,7 +257,7 @@ func Analizador(cadena string) {
 				estado = 8
 			} else if cadena[i] >= 48 && cadena[i] <= 57 {
 				cadenita += caracter
-				estado = 3
+				estado = 8
 			} else if cadena[i] == 92 {
 				lineaComando += cadenita
 				cadenita = ""
@@ -411,6 +392,14 @@ func AnalizarLineaComando(cadena string) {
 		GraficarDisco(arreglo[1])
 		break
 	case "mount":
+		if len(arreglo) == 2 {
+			listarMontadas()
+		} else {
+			Mount(arreglo)
+		}
+		break
+	case "unmount":
+		Unmount(arreglo)
 		break
 	default:
 		fmt.Println(colorYellow, "Comandos no reconocidos...")
@@ -539,6 +528,7 @@ func verificarNombreParticion(nombre string) bool {
 
 //UNIT funcion que verifica si la unidad es correcta
 func UNIT(unidad string) byte {
+	unidad = strings.ToLower(unidad)
 	if unidad == "m" {
 		return 'm'
 	} else if unidad == "k" {
@@ -757,7 +747,7 @@ func FDISK(subcomandos []string) {
 			break
 		case "-path":
 			dir = direccion(subcomandos[i])
-			if dir != "" {
+			if ExisteArchivo(dir) {
 				aux++
 			} else {
 				return
@@ -1502,8 +1492,6 @@ func CrearLogica(path string, size int64, name string, fit byte, tamExtendida in
 			copy(ebr.PartName[:], name)
 			EscribirEBR(ebr.PartStart, path)
 			MensajeConfirmacion()
-			fmt.Println("empieza particion 1: " + strconv.Itoa(int(ebr.PartStart)))
-			fmt.Println("siguiente: " + strconv.Itoa(int(ebr.PartNext)))
 			return
 		}
 		auxi := EBR{}
@@ -1521,8 +1509,6 @@ func CrearLogica(path string, size int64, name string, fit byte, tamExtendida in
 			ebr = auxi
 			EscribirEBR(ebr.PartStart, path)
 			MensajeConfirmacion()
-			fmt.Println("empieza particion : " + strconv.Itoa(int(ebr.PartStart)))
-			fmt.Println("siguiente: " + strconv.Itoa(int(ebr.PartNext)))
 			return
 		}
 
@@ -1551,8 +1537,6 @@ func CrearLogica(path string, size int64, name string, fit byte, tamExtendida in
 			ebr = nuevo
 			EscribirEBR(ebr.PartStart, path)
 			MensajeConfirmacion()
-			fmt.Println("empieza particion : " + strconv.Itoa(int(ebr.PartStart)))
-			fmt.Println("siguiente: " + strconv.Itoa(int(ebr.PartNext)))
 			return
 		}
 		ebr = ExtraerEBR(path, ebr.PartNext)
@@ -1573,9 +1557,6 @@ func CrearLogica(path string, size int64, name string, fit byte, tamExtendida in
 		ebr.PartNext = -1
 		EscribirEBR(ebr.PartStart, path)
 		MensajeConfirmacion()
-		fmt.Println("empieza particion : " + strconv.Itoa(int(ebr.PartStart)))
-		fmt.Println("siguiente: " + strconv.Itoa(int(ebr.PartNext)))
-		fmt.Println("anterior: " + strconv.Itoa(int(ebr.PartPrevious)))
 		return
 	}
 
@@ -1779,8 +1760,7 @@ func Grafextendida(path string, i int, nombre string) string {
 	cadena += "Tipo: " + "Extendida&#92;n"
 	cadena += "Size: " + strconv.Itoa(int(mbr.Particiones[i].PartSize)) + " bytes|{"
 	com, ss := BuscarExtendida()
-	//	ebr = ExtraerEBR(path, com)
-	//	imprimirComienzo(path)
+
 	ebr = ExtraerEBR(path, com)
 	a := false
 	if ebr.PartStatus == 73 {
@@ -1859,16 +1839,59 @@ func imprimirComienzo(path string) {
 	}
 }
 
-//Mount monta una partición en la RAM
-func Mount(path string, nombreParticion string) {
-	EscribirMBR(path)
-	for i := 0; i < 4; i++ {
-		nombre := Nombres(mbr.Particiones[i].PartName)
-		if nombre == nombreParticion {
+//ExisteArchivo verifica si el disco existe
+func ExisteArchivo(path string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
 
+//Mount monta una partición en la RAM
+func Mount(arreglo []string) {
+	dir := ""
+	aux := 0
+	nombreParticion := ""
+	for i := 1; i < len(arreglo); i++ {
+		subcomando := strings.Split(arreglo[i], "->")
+		switch strings.ToLower(subcomando[0]) {
+		case "-path":
+			dir = direccion(arreglo[i])
+			if ExisteArchivo(dir) {
+				aux++
+			} else {
+				fmt.Println("La ruta no ha sido encontrada!")
+				return
+			}
+			break
+		case "-name":
+			if verificarNombreParticion(subcomando[1]) {
+				aux++
+				nombreParticion = subcomando[1]
+			} else {
+				return
+			}
+			break
+		case "":
+			break
+		default:
+			fmt.Println(colorRed, "Comando no reconocido!")
+			return
 		}
 	}
+	if aux == 2 {
+		montar(nombreParticion, dir)
+	} else {
+		fmt.Println(colorRed, "Faltan parámetros solicitados!")
+	}
+}
 
+func montar(nombreParticion string, path string) {
+	b := false
+	mbr, b = LeerMBR(path)
+	if b {
+		AgregarDisco(path, nombreParticion)
+	}
 }
 
 //NodoParticion este struct contiene los datos que va a tener la lista de particiones montadas
@@ -1876,6 +1899,9 @@ type NodoParticion struct {
 	name          [16]byte
 	nombreMontada string
 	numero        int32
+	ebr           EBR
+	part          particion
+	tipo          string
 	siguiente     *NodoParticion
 }
 
@@ -1884,7 +1910,6 @@ type NodoDisco struct {
 	path             string
 	Nombre           string
 	Letra            byte
-	mbr              MBR
 	listaParticiones ListaParticion
 	siguiente        *NodoDisco
 }
@@ -1908,69 +1933,135 @@ func ListaDiscoVacia() bool {
 }
 
 //AgregarDisco este metodo mete el disco a la lista
-func AgregarDisco(path string, nombreParticion string, tipo string) {
-	if ListaDiscoVacia() {
-		var ini NodoDisco = NodoDisco{}
-		ListDiscos.inicio = &ini
-		ListDiscos.inicio.Letra = 97
-		array := strings.Split(path, "/")
-		nombre := array[len(array)-1]
-		ListDiscos.inicio.Nombre = nombre
-		ListDiscos.inicio.path = path
-		//Llenar lista de particion
-		var listParticion ListaParticion
-		LeerMBR(path)
-		ListDiscos.inicio.mbr = mbr
-		var ini2 NodoParticion = NodoParticion{}
-		listParticion.inicio = &ini2
-		listParticion.inicio.numero = 1
-		copy(listParticion.inicio.name[:], nombreParticion)
-		listParticion.inicio.nombreMontada = "dva1"
-		ListDiscos.inicio.listaParticiones = listParticion
-		ListDiscos.inicio.siguiente = nil
-	} else {
-		array := strings.Split(path, "/")
-		nombre := array[len(array)-1]
-
-		var auxiliar *NodoDisco
-		auxiliar = ListDiscos.inicio
-		a1 := false
-		for auxiliar != nil {
-			if auxiliar.Nombre == nombre {
-				PosListaParticion(auxiliar.listaParticiones, nombreParticion, string(rune(auxiliar.Letra)))
-				a1 = true
-				break
-			}
+func AgregarDisco(path string, nombreParticion string) {
+	p := false
+	mbr, p = LeerMBR(path)
+	if p {
+		log := false
+		PE, i := BuscarParticionPE(nombreParticion, path)
+		if !PE && i == -1 {
+			log = BuscarParticionExtendida(nombreParticion, path)
 		}
-
-		if !a1 {
-			var auxiliar2 *NodoDisco
-			auxiliar2 = ListDiscos.inicio
-			for auxiliar2.siguiente != nil {
-				auxiliar2 = auxiliar2.siguiente
-			}
-
-			auxiliar2.siguiente.Letra = auxiliar2.Letra + 1
+		if ListaDiscoVacia() && (PE || log) && ExisteArchivo(path) {
+			var ini NodoDisco = NodoDisco{}
+			ListDiscos.inicio = &ini
+			ListDiscos.inicio.Letra = 97
 			array := strings.Split(path, "/")
 			nombre := array[len(array)-1]
-			auxiliar2.siguiente.Nombre = nombre
-			auxiliar2.siguiente.path = path
+			ListDiscos.inicio.Nombre = nombre
+			ListDiscos.inicio.path = path
 			//Llenar lista de particion
 			var listParticion ListaParticion
-			LeerMBR(path)
-			auxiliar2.siguiente.mbr = mbr
+
+			var ini2 NodoParticion = NodoParticion{}
+			listParticion.inicio = &ini2
 			listParticion.inicio.numero = 1
+			if PE {
+				listParticion.inicio.part = mbr.Particiones[i]
+				if mbr.Particiones[i].PartType == 'p' {
+					listParticion.inicio.tipo = "primaria"
+				} else {
+					listParticion.inicio.tipo = "extendida"
+				}
+			} else if log {
+				listParticion.inicio.ebr = ebr
+				listParticion.inicio.tipo = "logica"
+			}
 			copy(listParticion.inicio.name[:], nombreParticion)
-			listParticion.inicio.nombreMontada = "dv" + string(rune(auxiliar2.siguiente.Letra+1)) + "1"
+			listParticion.inicio.nombreMontada = "dva1"
 			ListDiscos.inicio.listaParticiones = listParticion
 			ListDiscos.inicio.siguiente = nil
+			fmt.Println(colorGreen, "**************Información**************")
+			fmt.Println(colorGreen, "Se ha montado la partición exitosamente")
+		} else if (PE || log) && ExisteArchivo(path) {
+			array := strings.Split(path, "/")
+			nombre := array[len(array)-1]
 
+			var auxiliar *NodoDisco
+			auxiliar = ListDiscos.inicio
+			a1 := false
+			for auxiliar != nil {
+				if auxiliar.Nombre == nombre {
+					PosListaParticion(auxiliar.listaParticiones, nombreParticion, string(rune(auxiliar.Letra)), PE, log, i)
+					a1 = true
+					break
+				}
+			}
+
+			if !a1 {
+				var auxiliar2 *NodoDisco
+				auxiliar2 = ListDiscos.inicio
+				for auxiliar2.siguiente != nil {
+					auxiliar2 = auxiliar2.siguiente
+				}
+				auxiliar2.siguiente.Letra = auxiliar2.Letra + 1
+				array := strings.Split(path, "/")
+				nombre := array[len(array)-1]
+				auxiliar2.siguiente.Nombre = nombre
+				auxiliar2.siguiente.path = path
+				//Llenar lista de particion
+				var listParticion ListaParticion
+				listParticion.inicio.numero = 1
+				if PE {
+					listParticion.inicio.part = mbr.Particiones[i]
+					if mbr.Particiones[i].PartType == 'p' {
+						listParticion.inicio.tipo = "primaria"
+					}
+				} else if log {
+					listParticion.inicio.ebr = ebr
+					listParticion.inicio.tipo = "logica"
+				}
+				copy(listParticion.inicio.name[:], nombreParticion)
+				listParticion.inicio.nombreMontada = "vd" + string(rune(auxiliar2.siguiente.Letra+1)) + "1"
+				ListDiscos.inicio.listaParticiones = listParticion
+				ListDiscos.inicio.siguiente = nil
+				fmt.Println(colorGreen, "**************Información**************")
+				fmt.Println(colorGreen, "Se ha montado la partición exitosamente")
+			}
+		} else {
+			fmt.Println(colorRed, "Verifique el nombre y tipo de partición")
 		}
 	}
 }
 
+//BuscarParticionPE retorna informacion del tipo de particion
+func BuscarParticionPE(nombre string, path string) (bool, int) {
+	for i := 0; i < len(mbr.Particiones); i++ {
+		nom := Nombres(mbr.Particiones[i].PartName)
+		if nom == nombre {
+			if mbr.Particiones[i].PartType != byte('e') {
+				return true, i
+			}
+			return false, i
+
+		}
+	}
+	return false, -1
+}
+
+//BuscarParticionExtendida si encuentra el nombre, devuelve un boleano
+func BuscarParticionExtendida(nombre string, path string) bool {
+	for i := 0; i < 4; i++ {
+		if mbr.Particiones[i].PartType == byte('e') {
+			ebr = ExtraerEBR(path, mbr.Particiones[i].PartStart)
+			nom := Nombres(ebr.PartName)
+			if nom == nombre {
+				return true
+			}
+			for ebr.PartNext != -1 {
+				ebr = ExtraerEBR(path, ebr.PartNext)
+				nom := Nombres(ebr.PartName)
+				if nom == nombre {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 //PosListaParticion agrega un nuevo elemento a la lista particion
-func PosListaParticion(Lista ListaParticion, nombreparticion string, letra string) {
+func PosListaParticion(Lista ListaParticion, nombreparticion string, letra string, PE bool, log bool, i int) {
 	var auxiliar *NodoParticion
 	auxiliar = Lista.inicio
 	for auxiliar.siguiente != nil {
@@ -1978,7 +2069,165 @@ func PosListaParticion(Lista ListaParticion, nombreparticion string, letra strin
 	}
 	ini := NodoParticion{}
 	auxiliar.siguiente = &ini
+
+	if PE {
+		auxiliar.siguiente.part = mbr.Particiones[i]
+		if mbr.Particiones[i].PartType == 'p' {
+			auxiliar.siguiente.tipo = "primaria"
+		}
+	} else if log {
+		auxiliar.siguiente.ebr = ebr
+		auxiliar.siguiente.tipo = "logica"
+	}
 	copy(auxiliar.siguiente.name[:], nombreparticion)
 	auxiliar.siguiente.numero = auxiliar.numero + 1
 	auxiliar.siguiente.nombreMontada = "vd" + letra + strconv.Itoa(int(auxiliar.siguiente.numero))
+	fmt.Println(colorGreen, "**************Información**************")
+	fmt.Println(colorGreen, "Se ha montado la partición exitosamente")
+}
+func listarMontadas() {
+	auxi := 1
+	aa := ListDiscos.inicio
+	if aa == nil {
+		fmt.Println(colorYellow, "No hay ninguna partición montada")
+		return
+	}
+	fmt.Println(colorGreen, "*****************Lista de particiones montadas*****************")
+	for aa != nil {
+		fmt.Println("Nombre del disco: " + aa.Nombre)
+		lista := aa.listaParticiones.inicio
+		for lista != nil {
+			fmt.Println(colorGreen, strconv.Itoa(auxi)+".")
+			fmt.Println("Nombre de la partición: " + Nombres(lista.name))
+			fmt.Println("ID asignado: " + lista.nombreMontada)
+			fmt.Println("Tipo de partición: " + lista.tipo)
+			lista = lista.siguiente
+			auxi++
+		}
+		aa = aa.siguiente
+		fmt.Println(colorGreen, "___________________________________")
+	}
+}
+
+//Unmount verificación de parametros para el comando unmount
+func Unmount(arreglo []string) {
+
+	for i := 1; i < len(arreglo); i++ {
+		ids := strings.Split(arreglo[i], "->")
+		numeroID := int64(0)
+		esNum := false
+		//Este for recorre todos los ids que encuentre
+		if len(ids) == 1 {
+			return
+		}
+		for j := 0; j < len(ids); j++ {
+			ID := ids[j]
+			montada := ""
+			if (j + 1) < len(arreglo) {
+				montada = ids[j+1]
+				j++
+			} else {
+				return
+			}
+			numeroID, esNum = VerificarNumero(string(rune(ID[3])))
+			if !esNum {
+				fmt.Println("El id es incorrecto")
+				return
+			}
+			if montada != "" {
+				if strings.Contains(montada, "vd") {
+					letra := montada[2]
+					num, a := VerificarNumero(string(rune(montada[3])))
+					if a {
+						Desmontar(numeroID, letra, int32(num))
+					}
+				} else {
+					fmt.Println("El nombre de la partición a desmontar no es correcto")
+					return
+				}
+			} else {
+				fmt.Println("Falta el id de la partición montada!")
+				return
+			}
+		}
+	}
+}
+
+//Desmontar esta función busca la partición a desmontar y si la encuentra pues la desmonta xd
+func Desmontar(numID int64, letra byte, numP int32) {
+	auxi := ListDiscos.inicio
+	contador := int64(1)
+	for auxi != nil {
+		if contador == numID {
+			if letra == auxi.Letra {
+				buscarParticionMontada(numP, &auxi.listaParticiones, auxi.path)
+			} else {
+				fmt.Println(colorYellow, "La letra ingresada no coincide con la asignada")
+				return
+			}
+		}
+		contador++
+		auxi = auxi.siguiente
+	}
+}
+
+func buscarParticionMontada(numP int32, lista *ListaParticion, path string) {
+	var auxi *NodoParticion
+	auxi = lista.inicio
+
+	for auxi.siguiente != nil {
+
+		if auxi.numero == numP && auxi == lista.inicio {
+			mod(auxi, path)
+			lista.inicio = lista.inicio.siguiente
+			fmt.Println("Se ha desmontado la partición")
+			return
+		} else if auxi.siguiente.numero == numP {
+			mod(auxi.siguiente, path)
+			auxi.siguiente = auxi.siguiente.siguiente
+			fmt.Println("Se ha desmontado la partición")
+			return
+		}
+
+		auxi = auxi.siguiente
+	}
+}
+func mod(aux *NodoParticion, path string) {
+	if aux.tipo == "primaria" || aux.tipo == "extendida" {
+		Modificar(path, Nombres(aux.name), aux.part)
+	} else {
+		b := false
+		mbr, b = LeerMBR(path)
+		if b {
+			com, tam := BuscarExtendida()
+			ebr = ExtraerEBR(path, com)
+			if ebr.PartName == aux.name {
+				ebr = aux.ebr
+				EscribirEBR(ebr.PartStart, path)
+			} else {
+				for ebr.PartNext != -1 {
+					ebr = ExtraerEBR(path, ebr.PartNext)
+					if ebr.PartName == aux.name {
+						ebr = aux.ebr
+						EscribirEBR(ebr.PartStart, path)
+					}
+				}
+			}
+			tam = tam + 1
+		}
+	}
+}
+
+//Modificar actualiza la información de la partición encontrada
+func Modificar(path string, nombrep string, part particion) {
+	mbr, b := LeerMBR(path)
+	if b {
+		for i := 0; i < 4; i++ {
+			nombre := Nombres(mbr.Particiones[i].PartName)
+			if nombre == nombrep {
+				mbr.Particiones[i] = part
+				EscribirEBR(mbr.Particiones[i].PartStart, path)
+			}
+		}
+	}
 }

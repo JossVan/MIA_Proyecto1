@@ -1,5 +1,0 @@
-package contenido
-
-func graf() {
-
-}
