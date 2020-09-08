@@ -401,6 +401,11 @@ func AnalizarLineaComando(cadena string) {
 	case "unmount":
 		Unmount(arreglo)
 		break
+	case "mkfs":
+		MKFS(arreglo)
+		break
+	case "Rep":
+		break
 	default:
 		fmt.Println(colorYellow, "Comandos no reconocidos...")
 	}
@@ -1280,7 +1285,7 @@ func EscribirEBR(start int64, path string) {
 	var b3 bytes.Buffer
 	binary.Write(&b3, binary.BigEndian, &ebr)
 	escribirBytes(files, b3.Bytes())
-	ExtraerEBR(path, start)
+	//ExtraerEBR(path, start)
 }
 
 //InformacionParticion en este metodo se agrega toda la información al struct particion
@@ -1903,6 +1908,7 @@ type NodoParticion struct {
 	part          particion
 	tipo          string
 	siguiente     *NodoParticion
+	fecha         [19]byte
 }
 
 //NodoDisco el nodo contendrá la lista de discos
@@ -1968,6 +1974,10 @@ func AgregarDisco(path string, nombreParticion string) {
 				listParticion.inicio.tipo = "logica"
 			}
 			copy(listParticion.inicio.name[:], nombreParticion)
+			t := time.Now()
+			fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+				t.Hour(), t.Minute(), t.Second())
+			copy(listParticion.inicio.fecha[:], fecha)
 			listParticion.inicio.nombreMontada = "dva1"
 			ListDiscos.inicio.listaParticiones = listParticion
 			ListDiscos.inicio.siguiente = nil
@@ -2011,6 +2021,10 @@ func AgregarDisco(path string, nombreParticion string) {
 					listParticion.inicio.ebr = ebr
 					listParticion.inicio.tipo = "logica"
 				}
+				t := time.Now()
+				fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+					t.Hour(), t.Minute(), t.Second())
+				copy(listParticion.inicio.fecha[:], fecha)
 				copy(listParticion.inicio.name[:], nombreParticion)
 				listParticion.inicio.nombreMontada = "vd" + string(rune(auxiliar2.siguiente.Letra+1)) + "1"
 				ListDiscos.inicio.listaParticiones = listParticion
@@ -2079,6 +2093,10 @@ func PosListaParticion(Lista ListaParticion, nombreparticion string, letra strin
 		auxiliar.siguiente.ebr = ebr
 		auxiliar.siguiente.tipo = "logica"
 	}
+	t := time.Now()
+	fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	copy(auxiliar.siguiente.fecha[:], fecha)
 	copy(auxiliar.siguiente.name[:], nombreparticion)
 	auxiliar.siguiente.numero = auxiliar.numero + 1
 	auxiliar.siguiente.nombreMontada = "vd" + letra + strconv.Itoa(int(auxiliar.siguiente.numero))
@@ -2160,7 +2178,7 @@ func Desmontar(numID int64, letra byte, numP int32) {
 	for auxi != nil {
 		if contador == numID {
 			if letra == auxi.Letra {
-				buscarParticionMontada(numP, &auxi.listaParticiones, auxi.path)
+				buscarParticionMontadaDesmontar(numP, &auxi.listaParticiones, auxi.path)
 			} else {
 				fmt.Println(colorYellow, "La letra ingresada no coincide con la asignada")
 				return
@@ -2171,63 +2189,22 @@ func Desmontar(numID int64, letra byte, numP int32) {
 	}
 }
 
-func buscarParticionMontada(numP int32, lista *ListaParticion, path string) {
+func buscarParticionMontadaDesmontar(numP int32, lista *ListaParticion, path string) {
 	var auxi *NodoParticion
 	auxi = lista.inicio
 
 	for auxi.siguiente != nil {
 
 		if auxi.numero == numP && auxi == lista.inicio {
-			mod(auxi, path)
 			lista.inicio = lista.inicio.siguiente
 			fmt.Println("Se ha desmontado la partición")
 			return
 		} else if auxi.siguiente.numero == numP {
-			mod(auxi.siguiente, path)
 			auxi.siguiente = auxi.siguiente.siguiente
 			fmt.Println("Se ha desmontado la partición")
 			return
 		}
 
 		auxi = auxi.siguiente
-	}
-}
-func mod(aux *NodoParticion, path string) {
-	if aux.tipo == "primaria" || aux.tipo == "extendida" {
-		Modificar(path, Nombres(aux.name), aux.part)
-	} else {
-		b := false
-		mbr, b = LeerMBR(path)
-		if b {
-			com, tam := BuscarExtendida()
-			ebr = ExtraerEBR(path, com)
-			if ebr.PartName == aux.name {
-				ebr = aux.ebr
-				EscribirEBR(ebr.PartStart, path)
-			} else {
-				for ebr.PartNext != -1 {
-					ebr = ExtraerEBR(path, ebr.PartNext)
-					if ebr.PartName == aux.name {
-						ebr = aux.ebr
-						EscribirEBR(ebr.PartStart, path)
-					}
-				}
-			}
-			tam = tam + 1
-		}
-	}
-}
-
-//Modificar actualiza la información de la partición encontrada
-func Modificar(path string, nombrep string, part particion) {
-	mbr, b := LeerMBR(path)
-	if b {
-		for i := 0; i < 4; i++ {
-			nombre := Nombres(mbr.Particiones[i].PartName)
-			if nombre == nombrep {
-				mbr.Particiones[i] = part
-				EscribirEBR(mbr.Particiones[i].PartStart, path)
-			}
-		}
 	}
 }
