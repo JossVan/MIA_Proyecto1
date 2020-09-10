@@ -14,6 +14,8 @@ import (
 	"unsafe"
 )
 
+var super SUPERBOOT
+
 //SUPERBOOT atributos del superboot
 type SUPERBOOT struct {
 	SbNombreHD [16]byte
@@ -673,15 +675,73 @@ func AgregarUserTXT(start int64, path string) {
 
 //Mkdir analiza los comandos que vienen después
 func Mkdir(arreglo []string) {
-
+	id := ""
+	path := ""
+	crear := false
+	size := 0
+	cadena := ""
+	start := int64(0)
+	dir := ""
 	for i := 1; i < len(arreglo); i++ {
 		comandos := strings.Split(arreglo[i], "->")
-		com := strings.ToLower(comandos[1])
+		com := strings.ToLower(comandos[0])
 		switch com {
 		case "-id":
+			start, dir = BuscarParticionM(strings.ToLower(comandos[1]))
+			if path != "" && start != -1 {
+				id = strings.ToLower(comandos[1])
 
+			} else {
+				fmt.Println(colorRed, "El id de la partición no fue encontrado")
+				return
+			}
+			break
+		case "-path":
+			path := direccion(comandos[1])
+			if path != "" {
+
+			} else {
+				fmt.Println(colorRed, "Dirección inválida")
+			}
+			break
+		case "-p":
+			crear = true
+
+			break
+		case "-size":
+			n, err := strconv.Atoi(comandos[i])
+			if err != nil {
+				fmt.Println(colorRed, "Verifique el valor del size.")
+				return
+			}
+			size = n
+			break
+		case "-cont":
+			cadena = strings.ReplaceAll(comandos[i], "\"", "")
+
+			break
+		case "":
 			break
 		}
 	}
+
+	if id != "" && path != "" {
+		crearAC(id, path, cadena, int64(size), crear, start, dir)
+	} else {
+		fmt.Println(colorRed, "Faltan parámetros obligatorios.")
+	}
+
+}
+
+//crearAC crear archivos y carpetas
+func crearAC(id string, path string, contenido string, size int64, crear bool, start int64, dir string) {
+
+	carpetas := strings.Split(path, "/")
+	for i := 0; i < len(carpetas); i++ {
+
+	}
+}
+
+func CrearCarpeta(carpeta padre, conjCarpetas []string) {
 
 }
