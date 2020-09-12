@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -48,6 +49,8 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
 	eleccion := strings.TrimRight(entrada, "\r\n")
+	f := "mount -path->/home/josselyn/Escritorio/archivoBinario/disco.dsk -name->particion8\n"
+	f += "Mkdir -P -id->vda1 -path->/bin/hola8/mia2/que"
 	Analizador(eleccion + "$$")
 	for eleccion != "exit" {
 		fmt.Print(colorBlanco, "\nIntroduzca un comando----:: ")
@@ -272,6 +275,11 @@ func Analizador(cadena string) {
 					cadenita = ""
 					estado = 0
 				}
+			} else if caracter == " " {
+				cadenita += " "
+				estado = 0
+				lineaComando += cadenita
+				cadenita = ""
 			}
 			break
 		case 9:
@@ -380,7 +388,16 @@ func AnalizarLineaComando(cadena string) {
 		break
 	case "rmdisk":
 		fmt.Println(colorBlue, "Verificando requisitos para eliminación...")
-		RMDISK(arreglo[1])
+		fmt.Println(colorRed, "¿Seguro que desea eliminar el disco? s/n")
+		reader := bufio.NewReader(os.Stdin)
+		entrada, _ := reader.ReadString('\n')
+		eleccion := strings.TrimRight(entrada, "\r\n")
+		if eleccion == "s" {
+			RMDISK(arreglo[1])
+		} else {
+			fmt.Println(colorCyan, "Eliminación cancelada.")
+			return
+		}
 		break
 	case "fdisk":
 		fmt.Println(colorCyan, cadena)
@@ -389,21 +406,51 @@ func AnalizarLineaComando(cadena string) {
 		FDISK(arreglo)
 		break
 	case "graficar":
-		GraficarDisco(arreglo[1])
+		fmt.Println(colorCyan, cadena)
+		fmt.Println(colorCyan, "***************************")
+		GraficarDisco(arreglo)
 		break
 	case "mount":
-		if len(arreglo) == 2 {
+		fmt.Println(colorCyan, cadena)
+		fmt.Println(colorCyan, "***************************")
+		fmt.Println(len(arreglo))
+		if len(arreglo) <= 2 {
 			listarMontadas()
 		} else {
 			Mount(arreglo)
 		}
 		break
 	case "unmount":
+		fmt.Println(colorCyan, cadena)
+		fmt.Println(colorCyan, "***************************")
 		Unmount(arreglo)
 		break
 	case "mkfs":
-		MKFS(arreglo)
+		fmt.Println(colorCyan, cadena)
+		fmt.Println(colorCyan, "***************************")
+		fmt.Println(colorBlue, "Verificando requisitos de formateo...")
+		fmt.Println(colorRed, "¿Seguro que desea formatear el disco? s/n")
+		reader := bufio.NewReader(os.Stdin)
+		entrada, _ := reader.ReadString('\n')
+		eleccion := strings.TrimRight(entrada, "\r\n")
+
+		if eleccion == "s" {
+			MKFS(arreglo)
+		} else {
+			fmt.Println(colorCyan, "Formateo cancelado.")
+			return
+		}
 		break
+	case "mkdir":
+		fmt.Println(colorCyan, cadena)
+		fmt.Println(colorCyan, "***************************")
+		MkDir(arreglo)
+		break
+	case "mkfile":
+		break
+	case "g":
+		super = SUPERBOOT{}
+		GraficarDirectorio(arreglo[1])
 	case "Rep":
 		break
 	default:
@@ -598,6 +645,7 @@ func escribirBytes(file *os.File, bytes []byte) {
 
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 }
 
@@ -813,12 +861,22 @@ func FDISK(subcomandos []string) {
 	}
 	if aux >= 3 {
 		if delete != "" && dir != "" && name != "" {
-			EliminarParticion(dir, name, delete)
+			fmt.Println(colorBlue, "Verificando requisitos para eliminación...")
+			fmt.Println(colorRed, "¿Seguro que desea eliminar la partición? s/n")
+			reader := bufio.NewReader(os.Stdin)
+			entrada, _ := reader.ReadString('\n')
+			eleccion := strings.TrimRight(entrada, "\r\n")
+			if eleccion == "s" {
+				EliminarParticion(dir, name, delete)
+			} else {
+				fmt.Println(colorCyan, "Eliminación cancelada.")
+				return
+			}
 		} else if add != 0 && dir != "" && name != "" {
 			AgregarOQuitar(dir, int64(add), name, int64(tam))
 		} else if dir != "" && name != "" && tamanio != 0 {
 			CrearParticionNueva(int64(tamanio), int64(tam), dir, tipo, fit, name)
-			graphic(dir)
+			//	graphic(dir)
 		}
 	} else {
 		fmt.Println(colorYellow, "Faltan parámetros requeridos!")
@@ -1331,22 +1389,48 @@ func CrearParticion(path string, name string, tipo string, numero int) {
 	binary.Write(&b3, binary.BigEndian, &mbr)
 	escribirBytes(files, b3.Bytes())
 
-	fmt.Println(colorGreen, "*****Se ha creado partición nueva*****")
-	fmt.Println(colorGreen, "Nombre de la partición: "+name)
-	fmt.Printf("%s%d%s", " Tamaño: ", mbr.Particiones[numero].PartSize, "\n")
-	var tipos byte = mbr.Particiones[numero].PartType
-	switch string(rune(tipos)) {
-	case "l":
-		fmt.Println(colorGreen, "Tipo: lógica")
-		break
-	case "p":
-		fmt.Println(colorGreen, "Tipo: Primaria")
-		break
-	case "e":
-		fmt.Println(colorGreen, "Tipo: Extendida")
-		break
+	ParticionesActivas(path)
+}
 
+//ParticionesActivas muestra todas las particiones en el disco
+func ParticionesActivas(path string) {
+	fmt.Println(colorGreen, "**********Particiones actuales**********")
+	OrdenarArregloParticion()
+	for i := 0; i < 4; i++ {
+		if mbr.Particiones[i].PartStatus == 65 {
+			fmt.Println(colorGreen, "Nombre de la partición: "+Nombres(mbr.Particiones[i].PartName))
+			fmt.Println(colorGreen, "Tamaño de la partición: "+strconv.Itoa(int(mbr.Particiones[i].PartSize)))
+			fmt.Println(colorGreen, "Tipo de ajuste: "+string(rune(mbr.Particiones[i].PartFit)))
+			var tipos byte = mbr.Particiones[i].PartType
+			switch string(rune(tipos)) {
+			case "p":
+				fmt.Println(colorGreen, "Tipo de partición: Primaria")
+				break
+			case "e":
+				fmt.Println(colorGreen, "Tipo de partición: Extendida")
+				ebr = ExtraerEBR(path, mbr.Particiones[i].PartStart)
+				if ebr.PartStatus == 65 || ebr.PartNext != -1 {
+					fmt.Println("__________Particiones lógicas__________")
+				}
+				if ebr.PartStatus == 65 {
+					fmt.Println(colorGreen, "Nombre de la partición: "+Nombres(ebr.PartName))
+					fmt.Println("Tamaño de partición: " + strconv.Itoa(int(ebr.PartSize)))
+					fmt.Println("Ajuste de partición: " + string(rune(ebr.PartFit)))
+				}
+				for ebr.PartNext != -1 {
+					ebr = ExtraerEBR(path, ebr.PartNext)
+					fmt.Println(colorGreen, "Nombre de la partición: "+Nombres(ebr.PartName))
+					fmt.Println("Tamaño de partición: " + strconv.Itoa(int(ebr.PartSize)))
+					fmt.Println("Ajuste de partición: " + string(rune(ebr.PartFit)))
+				}
+				fmt.Println("_______________________________________")
+				break
+
+			}
+			fmt.Println("****************************************")
+		}
 	}
+
 }
 
 //PrimerAjuste este metodo devuelve la posicion inicial del primer espacio que encuentre
@@ -1573,17 +1657,10 @@ func CrearLogica(path string, size int64, name string, fit byte, tamExtendida in
 
 //MensajeConfirmacion este metodo imprime un mensaje
 func MensajeConfirmacion() {
-	n := ""
-	for i := 0; i < len(ebr.PartName); i++ {
-		if ebr.PartName[i] != 0 {
-			n += string(rune(ebr.PartName[i]))
-		} else {
-			break
-		}
-	}
+
 	fmt.Println(colorGreen, "****Información de la partición lógica****")
-	fmt.Println(" Nombre de la partición: " + n)
-	fmt.Printf("%s%d", " Tamaño de la partición: ", ebr.PartSize)
+	fmt.Println(" Nombre de la partición: " + Nombres(ebr.PartName))
+	fmt.Printf("%s%d", "Tamaño de la partición: ", ebr.PartSize)
 	fmt.Println("\n*******************************************")
 
 }
@@ -1688,7 +1765,16 @@ func Nombres(n [16]byte) string {
 }
 
 //GraficarDisco crea el txt del graphviz para graficar
-func GraficarDisco(path string) {
+func GraficarDisco(path []string) {
+	dii := ""
+	for i := 1; i < len(path); i++ {
+		dii = direccion(path[i])
+		if dii == "" {
+			return
+		}
+		break
+
+	}
 	dd := "/home/josselyn/Escritorio/"
 	dir := "/home/josselyn/Escritorio/Disco.txt"
 	var _, errr = os.Stat(dir)
@@ -1701,7 +1787,7 @@ func GraficarDisco(path string) {
 		defer file.Close()
 	}
 	d := false
-	mbr, d = LeerMBR(path)
+	mbr, d = LeerMBR(dii)
 	if d == true {
 		cadena := "digraph structs {\n"
 		cadena += "node [shape=record];\n"
@@ -1724,7 +1810,7 @@ func GraficarDisco(path string) {
 					cadena += "|"
 					nombre := Nombres(mbr.Particiones[i].PartName)
 					if mbr.Particiones[i].PartType == byte('e') {
-						cadena += Grafextendida(path, i, nombre)
+						cadena += Grafextendida(dii, i, nombre)
 					} else {
 						cadena += "Nombre: " + nombre + "&#92;n"
 						cadena += "Tipo: " + "Primaria" + "&#92;n"
@@ -1780,18 +1866,22 @@ func Grafextendida(path string, i int, nombre string) string {
 	}
 	if a == true || (ebr.PartStatus == 65) {
 		if a == false {
+			cadena += "EBR&#92;n"
 			nombre := Nombres(ebr.PartName)
 			cadena += "Nombre: " + nombre + "&#92;n"
-			cadena += "Size: " + strconv.Itoa(int(ebr.PartSize)) + "&#92;n"
-			cadena += "Tipo: Logica"
+			cadena += "|"
+			cadena += "Logica&#92;n"
+			cadena += "Size: " + strconv.Itoa(int(ebr.PartSize))
 		} else {
 			ebr = ExtraerEBR(path, ebr.PartNext)
 			if ebr.PartStatus == 65 {
 				cadena += "|"
+				cadena += "EBR&#92;n"
 				nombre := Nombres(ebr.PartName)
 				cadena += "Nombre: " + nombre + "&#92;n"
-				cadena += "Size: " + strconv.Itoa(int(ebr.PartSize)) + "&#92;n"
-				cadena += "Tipo: Logica"
+				cadena += "|"
+				cadena += "Logica&#92;n"
+				cadena += "Size: " + strconv.Itoa(int(ebr.PartSize))
 			}
 		}
 		tamebr := int64(unsafe.Sizeof(ebr)) - 1
@@ -1806,9 +1896,11 @@ func Grafextendida(path string, i int, nombre string) string {
 					auxi := EBR{}
 					auxi = ExtraerEBR(path, ebr.PartNext)
 					nombre := Nombres(auxi.PartName)
+					cadena += "EBR&#92;n"
 					cadena += "Nombre: " + nombre + "&#92;n"
-					cadena += "Size: " + strconv.Itoa(int(auxi.PartSize)) + "&#92;n"
-					cadena += "Tipo: Logica"
+					cadena += "|"
+					cadena += "Logica&#92;n"
+					cadena += "Size: " + strconv.Itoa(int(auxi.PartSize))
 
 				}
 			} else {
@@ -1819,9 +1911,12 @@ func Grafextendida(path string, i int, nombre string) string {
 					auxi := EBR{}
 					auxi = ExtraerEBR(path, ebr.PartNext)
 					nombre := Nombres(auxi.PartName)
+					cadena += "EBR&#92;n"
 					cadena += "Nombre: " + nombre + "&#92;n"
-					cadena += "Size: " + strconv.Itoa(int(auxi.PartSize)) + "&#92;n"
-					cadena += "Tipo: Logica"
+					cadena += "|"
+					cadena += "Logica&#92;n"
+					cadena += "Size: " + strconv.Itoa(int(auxi.PartSize))
+
 				}
 			}
 			ebr = ExtraerEBR(path, ebr.PartNext)
@@ -1978,7 +2073,7 @@ func AgregarDisco(path string, nombreParticion string) {
 			fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
 				t.Hour(), t.Minute(), t.Second())
 			copy(listParticion.inicio.fecha[:], fecha)
-			listParticion.inicio.nombreMontada = "dva1"
+			listParticion.inicio.nombreMontada = "vda1"
 			ListDiscos.inicio.listaParticiones = listParticion
 			ListDiscos.inicio.siguiente = nil
 			fmt.Println(colorGreen, "**************Información**************")
@@ -2207,4 +2302,1277 @@ func buscarParticionMontadaDesmontar(numP int32, lista *ListaParticion, path str
 
 		auxi = auxi.siguiente
 	}
+}
+
+var super SUPERBOOT
+
+//SUPERBOOT atributos del superboot
+type SUPERBOOT struct {
+	SbNombreHD [16]byte
+	//Cantidad de estructuras en la partición
+	SbAVDcount               int64
+	SbDetalleDirectorioCount int64
+	SbINodoCount             int64
+	SbBloquesCount           int64
+	//Cantidad de estructuras libres
+	SbAVDFree               int64
+	SbDetalleDirectorioFree int64
+	SbINodoFree             int64
+	SbBloqueFree            int64
+	//Fechas
+	SbDateCreation [19]byte
+	SbDateMontaje  [19]byte
+	//Cantidad de montajes
+	SbMontajesCount int64
+	//Apuntador de inicio de bipmaps y estructuras
+	SbAptrStartBipmapAVD    int64
+	SbAptrStartAVD          int64
+	SbAptrStartBipmapDD     int64
+	SbAptrStartDD           int64
+	SbAptrStartBipmapINodo  int64
+	SbAptrStartINodo        int64
+	SbAptrStartBipmapBloque int64
+	SbAptrStartBloque       int64
+	SbAptrStartLogBitacora  int64
+	//Tamaño de una estructura
+	SbSizeStructAVD    int64
+	SbSizeStructDD     int64
+	SbSizeStructINodo  int64
+	SbSizeStructBloque int64
+	//Primer bite libre en los bipmaps
+	SbFirstBitFreeAVD    int64
+	SbFirstBitFreeDD     int64
+	SbFirstBitFreeINodo  int64
+	SbFirstBitFreeBloque int64
+	SbMagicNum           int64
+}
+
+//ArbolVirtualDirectorio información del AVD
+type ArbolVirtualDirectorio struct {
+	AVDFechaCreacion           [19]byte
+	AVDNameDirectoy            [16]byte
+	AVDAptrArraySubdirectorios [6]int64
+	AVDAptrDetalleDirectorio   int64
+	AVDAptrInd                 int64
+	AVDProper                  int64
+	AVDGid                     int64
+	AVDPerm                    uint8
+}
+
+//DetalleDirectorio información del DD
+type DetalleDirectorio struct {
+	DDArrayAptrINodo [5]InfoArchivo
+	DDAptrIndirecto  int64
+}
+
+//InfoArchivo info del archivo en el DD
+type InfoArchivo struct {
+	DDfileName             [20]byte
+	DDAptrINodo            int64
+	DDFileDateCreation     [19]byte
+	DDFileDateModificacion [19]byte
+}
+
+//INodo info del archivo
+type INodo struct {
+	INodoNumero           int64
+	INodoFileSize         int64
+	INodoBloquesAsignados int64
+	INodoAptrDeBloque     [4]int64
+	INodoAptrInd          int64
+	INodoIDPropier        int64
+	INodoGid              int64
+	INodoPerm             uint8
+}
+
+//Bloque contenido del bloque
+type Bloque struct {
+	BDarray [25]byte
+}
+
+//LogBitacora contenido del log
+type LogBitacora struct {
+	logTipoOperacion byte
+	logTipo          byte
+	logNombre        [20]byte
+	//logContenido
+	logFechaTransicion [19]byte
+}
+
+//MKFS evalua los subcomandos dle mkfs
+func MKFS(arreglo []string) {
+	id := ""
+	tipo := ""
+	aux := 0
+	for i := 1; i < len(arreglo); i++ {
+		comandos := strings.Split(arreglo[i], "->")
+		switch strings.ToLower(comandos[0]) {
+		case "-id":
+			id = comandos[1]
+			aux++
+			break
+		case "-type":
+			if DELETE(comandos[1]) {
+				aux++
+			} else {
+				fmt.Println("Tipo de formateo inválido")
+				return
+			}
+			break
+		case "":
+			break
+		default:
+			fmt.Println(colorRed, "Comando no reconocido!")
+			return
+
+		}
+	}
+	if aux == 2 {
+		BuscarID(tipo, id)
+	} else if tipo == "" && id != "" {
+		BuscarID("full", id)
+	}
+
+}
+
+//BuscarID busca el id de la particion montada
+func BuscarID(tipo string, id string) {
+	var aux *NodoDisco
+	aux = ListDiscos.inicio
+	for aux != nil {
+		var lista ListaParticion
+		lista = aux.listaParticiones
+		aux2 := lista.inicio
+		for aux2 != nil {
+			if aux2.nombreMontada == id {
+				if aux2.tipo == "primaria" {
+					formatear(aux2.part.PartSize, aux.Nombre, aux2.part.PartStart, aux2.fecha, aux.path, aux2.nombreMontada)
+					///	GraficarSUPERBOOT("/home/josselyn/Escritorio/SUPER.png", id)
+					AgregarUserTXT(aux2.part.PartStart, aux.path)
+					GraficarSUPERBOOT("/home/josselyn/Escritorio/SUPER.png", id)
+					return
+				}
+				formatear(aux2.ebr.PartSize, aux.Nombre, aux2.ebr.PartStart, aux2.fecha, aux.path, aux2.nombreMontada)
+				AgregarUserTXT(aux2.ebr.PartStart, aux.path)
+				GraficarSUPERBOOT("/home/josselyn/Escritorio/SUPER.png", id)
+				return
+
+			}
+			aux2 = aux2.siguiente
+		}
+		aux = aux.siguiente
+	}
+
+	fmt.Println("No se ha encontrado el nombre de la partición que se desea formatear.")
+}
+
+//SetValores calcula los tamaños de las estructuras
+func SetValores() (tamSB int64, tamAVD int64, tamDD int64, tamINodo int64, tamBloque int64, tamBitacora int64) {
+	SB := SUPERBOOT{}
+	tamSB = int64(unsafe.Sizeof(SB))
+	AVD := ArbolVirtualDirectorio{}
+	tamAVD = int64(unsafe.Sizeof(AVD))
+	DD := DetalleDirectorio{}
+	tamDD = int64(unsafe.Sizeof(DD))
+	INODO := INodo{}
+	tamINodo = int64(unsafe.Sizeof(INODO))
+	BLOQUE := Bloque{}
+	tamBloque = int64(unsafe.Sizeof(BLOQUE))
+	BITACORA := LogBitacora{}
+	tamBitacora = int64(unsafe.Sizeof(BITACORA))
+	return
+}
+func formatear(size int64, NombreDisco string, inicioParticion int64, fechaM [19]byte, path string, nombre string) {
+	tamSB, tamAVD, tamDD, tamINodo, tamBloque, tamBitacora := SetValores()
+	tamEstructuras := (size - (2 * tamSB)) / (27 + tamAVD + tamDD + (5*tamINodo + (20 * tamBloque) + tamBitacora))
+	cantAVD := tamEstructuras
+	cantDD := tamEstructuras
+	cantInodo := 5 * tamEstructuras
+	cantBloques := 4 * cantInodo
+	cantBitacora := tamEstructuras
+	SB := SUPERBOOT{}
+	copy(SB.SbNombreHD[:], NombreDisco)
+	SB.SbAVDcount = cantAVD
+	SB.SbDetalleDirectorioCount = cantDD
+	SB.SbINodoCount = cantInodo
+	SB.SbBloquesCount = cantBloques
+	SB.SbAVDFree = cantAVD
+	SB.SbDetalleDirectorioFree = cantDD
+	SB.SbINodoFree = cantInodo
+	SB.SbBloqueFree = cantBloques
+	t := time.Now()
+	fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	copy(SB.SbDateCreation[:], fecha)
+	SB.SbDateMontaje = fechaM
+
+	SB.SbAptrStartBipmapAVD = inicioParticion + tamSB
+	SB.SbAptrStartAVD = SB.SbAptrStartBipmapAVD + cantAVD
+	SB.SbAptrStartBipmapDD = SB.SbAptrStartAVD + (tamAVD * cantAVD)
+	SB.SbAptrStartDD = SB.SbAptrStartBipmapDD + cantDD
+	SB.SbAptrStartBipmapINodo = SB.SbAptrStartDD + (tamDD * cantDD)
+	SB.SbAptrStartINodo = SB.SbAptrStartBipmapINodo + cantInodo
+	SB.SbAptrStartBipmapBloque = SB.SbAptrStartINodo + (tamINodo * cantInodo)
+	SB.SbAptrStartBloque = SB.SbAptrStartBipmapBloque + cantBloques
+	SB.SbAptrStartLogBitacora = SB.SbAptrStartBloque + (tamBloque + cantBloques)
+
+	SB.SbSizeStructAVD = tamAVD
+	SB.SbSizeStructDD = tamDD
+	SB.SbSizeStructINodo = tamINodo
+	SB.SbSizeStructBloque = tamBloque
+
+	SB.SbFirstBitFreeAVD = SB.SbAptrStartBipmapAVD
+	SB.SbFirstBitFreeDD = SB.SbAptrStartBipmapDD
+	SB.SbFirstBitFreeINodo = SB.SbAptrStartBipmapINodo
+	SB.SbFirstBitFreeBloque = SB.SbAptrStartBipmapBloque
+
+	SB.SbMontajesCount++
+	SB.SbMagicNum = 201602676
+
+	files, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	//Se escribe el superboot
+	files.Seek(inicioParticion, 0)
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &SB)
+	escribirBytes(files, b3.Bytes())
+	//Se reserva espacio para el bipmap del AVD
+	files.Seek(SB.SbAptrStartBipmapAVD, 0)
+	var cero byte = 0
+	i := int64(0)
+	for i = 0; i < cantAVD; i++ {
+		var b4 bytes.Buffer
+		binary.Write(&b4, binary.BigEndian, &cero)
+		escribirBytes(files, b4.Bytes())
+	}
+
+	start := SB.SbAptrStartAVD
+	files.Seek(start, 0)
+	for i = 0; i < cantAVD; i++ {
+		var b5 bytes.Buffer
+		avd := ArbolVirtualDirectorio{}
+		binary.Write(&b5, binary.BigEndian, &avd)
+		escribirBytes(files, b5.Bytes())
+	}
+	//Se reserva espacio para los bipmaps del DD
+	files.Seek(SB.SbAptrStartBipmapDD, 0)
+	for i = 0; i < cantDD; i++ {
+		var b6 bytes.Buffer
+		binary.Write(&b6, binary.BigEndian, &cero)
+		escribirBytes(files, b6.Bytes())
+	}
+	//Se agregan las estructuras DD a la particion
+	files.Seek(SB.SbAptrStartDD, 0)
+	for i = 0; i < cantDD; i++ {
+		var b7 bytes.Buffer
+		DD := DetalleDirectorio{}
+		binary.Write(&b7, binary.BigEndian, &DD)
+		escribirBytes(files, b7.Bytes())
+	}
+	//Se asigna el espacio para el bipmap de los inodos
+	files.Seek(SB.SbAptrStartBipmapINodo, 0)
+	for i = 0; i < cantInodo; i++ {
+		var b8 bytes.Buffer
+		binary.Write(&b8, binary.BigEndian, &cero)
+		escribirBytes(files, b8.Bytes())
+	}
+	//Se agregan las estructuras de Inodo a la particion
+	files.Seek(SB.SbAptrStartINodo, 0)
+	for i = 0; i < cantInodo; i++ {
+		var b8 bytes.Buffer
+		inodo := INodo{}
+		binary.Write(&b8, binary.BigEndian, &inodo)
+		escribirBytes(files, b8.Bytes())
+	}
+	//Se asigna espacio para el bipmap de los bloques
+	files.Seek(SB.SbAptrStartBipmapBloque, 0)
+	for i = 0; i < cantBloques; i++ {
+		var b8 bytes.Buffer
+		binary.Write(&b8, binary.BigEndian, &cero)
+		escribirBytes(files, b8.Bytes())
+	}
+	files.Seek(SB.SbAptrStartBloque, 0)
+	for i = 0; i < cantBloques; i++ {
+		var b8 bytes.Buffer
+		bloque := Bloque{}
+		binary.Write(&b8, binary.BigEndian, &bloque)
+		escribirBytes(files, b8.Bytes())
+	}
+	files.Seek(SB.SbAptrStartLogBitacora, 0)
+	for i = 0; i < cantBitacora; i++ {
+		var b8 bytes.Buffer
+		bitacora := LogBitacora{}
+		binary.Write(&b8, binary.BigEndian, &bitacora)
+		escribirBytes(files, b8.Bytes())
+	}
+	fmt.Println(colorGreen, "************INFORMACIÓN**************")
+	fmt.Println("Se ha formateado la partición " + nombre + " correctamente.")
+}
+
+//EscribirSUPERBOOT escribe el superboot al inicio de la particion
+func EscribirSUPERBOOT(start int64, path string, super SUPERBOOT) {
+	files, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	files.Seek(start, 0)
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &super)
+	escribirBytes(files, b3.Bytes())
+
+}
+
+//EscribirAVD reescribe la estructura avd
+func EscribirAVD(start int64, path string, avd ArbolVirtualDirectorio) {
+	files, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	files.Seek(start, 0)
+
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &avd)
+	escribirBytes(files, b3.Bytes())
+}
+
+//EscribirDD actualiza la estructura del dd
+func EscribirDD(start int64, path string, dd DetalleDirectorio) {
+	files, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	files.Seek(start, 0)
+
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &dd)
+	escribirBytes(files, b3.Bytes())
+}
+
+//EscribirINodo actualiza la información del inodo
+func EscribirINodo(start int64, path string, inodo INodo) {
+	files, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	files.Seek(start, 0)
+
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &inodo)
+	escribirBytes(files, b3.Bytes())
+}
+
+//EscribirBloque actualiza el bloque en la posicion solicitada
+func EscribirBloque(start int64, path string, bloque Bloque) {
+	files, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer files.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	files.Seek(start, 0)
+
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &bloque)
+	escribirBytes(files, b3.Bytes())
+}
+
+//LeerSUPERBOOT extra la estructura del superboot
+func LeerSUPERBOOT(start int64, path string) (SUPERBOOT, bool) {
+	file, err := os.Open(path)
+	defer file.Close()
+	if err != nil {
+		fmt.Println(colorRed, "No se encontró la ruta del archivo")
+		return SUPERBOOT{}, false
+	}
+	super := SUPERBOOT{}
+	tamSB := int(unsafe.Sizeof(super))
+	file.Seek(start, 0)
+	data := readNextBytes(file, tamSB)
+	buffer := bytes.NewBuffer(data)
+	err = binary.Read(buffer, binary.BigEndian, &super)
+	if err != nil {
+		panic(err)
+	}
+
+	return super, true
+
+}
+
+//LeerAVD este metodo extrae el AVD requerido de la partición
+func LeerAVD(start int64, path string, tamAVD int64) (ArbolVirtualDirectorio, bool) {
+	file, err := os.Open(path)
+	defer file.Close()
+	if err != nil {
+		fmt.Println(colorRed, "No se encontró la ruta del archivo")
+		return ArbolVirtualDirectorio{}, false
+	}
+	AVD := ArbolVirtualDirectorio{}
+	file.Seek(start, 0)
+	data := readNextBytes(file, int(tamAVD))
+	buffer := bytes.NewBuffer(data)
+	err = binary.Read(buffer, binary.BigEndian, &AVD)
+	if err != nil {
+		panic(err)
+	}
+
+	return AVD, true
+}
+
+//LeerDD extrae el detalle de directorio en la posicion solicitada
+func LeerDD(start int64, path string, tamDD int64) DetalleDirectorio {
+	file, err := os.Open(path)
+	defer file.Close()
+	if err != nil {
+		fmt.Println(colorRed, "No se encontró la ruta del archivo")
+		return DetalleDirectorio{}
+	}
+	DD := DetalleDirectorio{}
+	file.Seek(start, 0)
+	data := readNextBytes(file, int(tamDD))
+	buffer := bytes.NewBuffer(data)
+	err = binary.Read(buffer, binary.BigEndian, &DD)
+	if err != nil {
+		panic(err)
+	}
+	return DD
+}
+
+//LeerINodo extrae el inodo en la posicion solicitada
+func LeerINodo(start int64, path string, tamINodo int64) INodo {
+	file, err := os.Open(path)
+	defer file.Close()
+	if err != nil {
+		fmt.Println(colorRed, "No se encontró la ruta del archivo")
+		return INodo{}
+	}
+	INodo := INodo{}
+	file.Seek(start, 0)
+	data := readNextBytes(file, int(tamINodo))
+	buffer := bytes.NewBuffer(data)
+	err = binary.Read(buffer, binary.BigEndian, &INodo)
+	if err != nil {
+		panic(err)
+	}
+	return INodo
+}
+
+//LeerBloque extrae el bloque en la posición solicitada
+func LeerBloque(start int64, path string, tamBloque int64) Bloque {
+	file, err := os.Open(path)
+	defer file.Close()
+	if err != nil {
+		fmt.Println(colorRed, "No se encontró la ruta del archivo")
+		return Bloque{}
+	}
+	Bloque := Bloque{}
+	file.Seek(start, 0)
+	data := readNextBytes(file, int(tamBloque))
+	buffer := bytes.NewBuffer(data)
+	err = binary.Read(buffer, binary.BigEndian, &Bloque)
+	if err != nil {
+		panic(err)
+	}
+	return Bloque
+}
+
+//BuscarParticionM busca el id de la particion montada
+func BuscarParticionM(id string) (int64, string) {
+	id = strings.ToLower(id)
+	if strings.Contains(id, "vd") {
+		letraAbuscar := id[2]
+		var nodoAux *NodoDisco
+		nodoAux = ListDiscos.inicio
+		for nodoAux != nil {
+			if nodoAux.Letra == letraAbuscar {
+				var NodoAuxL *NodoParticion
+				NodoAuxL = nodoAux.listaParticiones.inicio
+				for NodoAuxL != nil {
+					if id == NodoAuxL.nombreMontada {
+						if NodoAuxL.tipo == "primaria" {
+							return NodoAuxL.part.PartStart, nodoAux.path
+						}
+						return NodoAuxL.ebr.PartStart, nodoAux.path
+
+					}
+					NodoAuxL = NodoAuxL.siguiente
+				}
+			}
+			nodoAux = nodoAux.siguiente
+		}
+	}
+	return -1, ""
+}
+
+//GraficarSUPERBOOT Grafica en una tabla la información del sistema de archivos
+func GraficarSUPERBOOT(pathi string, nombre string) {
+
+	dir := "/home/josselyn/Escritorio/SUPERBOOT_" + nombre + ".txt"
+	var _, errr = os.Stat(dir)
+	//Crea el archivo si no existe
+	if os.IsNotExist(errr) {
+		var file, errr = os.Create(dir)
+		if existeError(errr) {
+			return
+		}
+		defer file.Close()
+	}
+
+	start, path := BuscarParticionM(nombre)
+
+	super, auxi := LeerSUPERBOOT(start, path)
+	if start != -1 && auxi != false {
+		cadena := ""
+		cadena += "digraph G {\ngraph [pad=\"0.5\", nodesep=\"1\", ranksep=\"2\"];"
+		cadena += "\nnode [shape=plain]\nrankdir=LR;\n"
+		cadena += "Tabla[label=<\n<table border=\"1\" cellborder=\"1\" cellspacing=\"1\">\n"
+		cadena += "<tr><td bgcolor=\"#76D7C4\"><i>Nombre</i></td>\n<td bgcolor=\"#76D7C4\"><i>Valor</i> </td>\n</tr>"
+
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Nombre_HD</td><td>" + Nombres(super.SbNombreHD) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Arbol_Virtual_Count</td><td>" + strconv.Itoa(int(super.SbAVDcount)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb__Detalle_Directorio_Count</td><td>" + strconv.Itoa(int(super.SbDetalleDirectorioCount)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_INodos_Count</td><td>" + strconv.Itoa(int(super.SbINodoCount)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Bloques_Count</td><td>" + strconv.Itoa(int(super.SbBloquesCount)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Arbol_Virtual_Free</td><td>" + strconv.Itoa(int(super.SbAVDFree)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Detalle_Directorio_Free</td><td>" + strconv.Itoa(int(super.SbDetalleDirectorioFree)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_INodo_Free</td><td>" + strconv.Itoa(int(super.SbINodoFree)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Bloques_Free</td><td>" + strconv.Itoa(int(super.SbBloqueFree)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Date_Creation</td><td>" + string(super.SbDateCreation[:]) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Date_Montaje</td><td>" + string(super.SbDateMontaje[:]) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_MontajesCount</td><td>" + strconv.Itoa(int(super.SbMontajesCount)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_Bipmap_AVD</td><td>" + strconv.Itoa(int(super.SbAptrStartBipmapAVD)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_AVD</td><td>" + strconv.Itoa(int(super.SbAptrStartAVD)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_Bipmap_DD</td><td>" + strconv.Itoa(int(super.SbAptrStartBipmapDD)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_DD</td><td>" + strconv.Itoa(int(super.SbAptrStartDD)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_Bipmap_INodo</td><td>" + strconv.Itoa(int(super.SbAptrStartBipmapINodo)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_INodo</td><td>" + strconv.Itoa(int(super.SbAptrStartINodo)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_Bipmap_Bloque</td><td>" + strconv.Itoa(int(super.SbAptrStartBipmapBloque)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_Bloque</td><td>" + strconv.Itoa(int(super.SbAptrStartBloque)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Aptr_Start_Bitacora</td><td>" + strconv.Itoa(int(super.SbAptrStartLogBitacora)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Size_Struct_AVD</td><td>" + strconv.Itoa(int(super.SbSizeStructAVD)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Size_Struct_DD</td><td>" + strconv.Itoa(int(super.SbSizeStructDD)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Size_Struct_Inodo</td><td>" + strconv.Itoa(int(super.SbSizeStructINodo)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Size_Struct_Bloques</td><td>" + strconv.Itoa(int(super.SbSizeStructBloque)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_First_Free_Bit_AVD</td><td>" + strconv.Itoa(int(super.SbFirstBitFreeAVD)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_First_Free_Bit_DD</td><td>" + strconv.Itoa(int(super.SbFirstBitFreeDD)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_First_Free_Bit_INodo</td><td>" + strconv.Itoa(int(super.SbFirstBitFreeINodo)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_First_Free_Bit_Bloques</td><td>" + strconv.Itoa(int(super.SbFirstBitFreeBloque)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#A3E4D7\">Sb_Magic_Num</td><td>" + strconv.Itoa(int(super.SbMagicNum)) + "</td></tr>\n"
+		cadena += "</table>>];}"
+		errrr := ioutil.WriteFile(dir, []byte(cadena[:]), 0644)
+		if errrr != nil {
+			panic(errrr)
+		}
+		com1 := "dot"
+		com2 := "-Tpng"
+		com3 := dir
+		com4 := "-o"
+		com5 := pathi
+		exec.Command(com1, com2, com3, com4, com5).Output()
+		fmt.Println(colorGreen, "Success")
+	} else {
+		fmt.Println("El ID de la partición no ha sido encontrado!")
+	}
+}
+
+//REP comando para reportar todos los resultados
+func REP() {
+
+}
+
+//AgregarUserTXT se agrega el archivo a la raiz
+func AgregarUserTXT(start int64, path string) {
+	cadena := "1,G,root\n"
+	cadena += "1,U,root,root,201602676\n"
+	super, valido := LeerSUPERBOOT(start, path)
+	if valido {
+		file, err := os.OpenFile(path, os.O_RDWR, 0644)
+		defer file.Close()
+		if err != nil {
+			fmt.Println(colorRed, "No se encontró la ruta del archivo")
+
+		}
+		var ocupado byte = '1'
+		//Actualiza el bipmap del avd
+		file.Seek(super.SbAptrStartBipmapAVD, 0)
+		var b3 bytes.Buffer
+		binary.Write(&b3, binary.BigEndian, &ocupado)
+		escribirBytes(file, b3.Bytes())
+
+		avd, aux := LeerAVD(super.SbAptrStartAVD, path, super.SbSizeStructAVD)
+		if aux {
+			super.SbAVDFree--
+			copy(avd.AVDNameDirectoy[:], "/")
+			t := time.Now()
+			fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+				t.Hour(), t.Minute(), t.Second())
+			copy(avd.AVDFechaCreacion[:], fecha)
+			avd.AVDAptrDetalleDirectorio = 1
+			avd.AVDProper = 1
+			EscribirAVD(super.SbAptrStartAVD, path, avd)
+			super.SbDetalleDirectorioFree--
+			//Actualiza el bipmap del DD
+			file.Seek(super.SbAptrStartBipmapDD, 0)
+			var b3 bytes.Buffer
+			binary.Write(&b3, binary.BigEndian, &ocupado)
+			escribirBytes(file, b3.Bytes())
+			dd := LeerDD(super.SbAptrStartDD, path, super.SbSizeStructDD)
+			dd.DDArrayAptrINodo[0].DDAptrINodo = 1
+			copy(dd.DDArrayAptrINodo[0].DDFileDateCreation[:], fecha)
+			copy(dd.DDArrayAptrINodo[0].DDFileDateModificacion[:], fecha)
+			copy(dd.DDArrayAptrINodo[0].DDfileName[:], "user.txt")
+			EscribirDD(super.SbAptrStartDD, path, dd)
+			super.SbINodoFree--
+			//Actualiza el bipmap del inodo
+			file.Seek(super.SbAptrStartBipmapINodo, 0)
+			var b4 bytes.Buffer
+			binary.Write(&b4, binary.BigEndian, &ocupado)
+			escribirBytes(file, b4.Bytes())
+			inodo := INodo{}
+			inodo.INodoNumero = 1
+			inodo.INodoFileSize = 40
+			inodo.INodoBloquesAsignados = 2
+			inodo.INodoAptrDeBloque[0] = 1
+			inodo.INodoAptrDeBloque[1] = 2
+			inodo.INodoIDPropier = 1
+			inodo.INodoGid = 1
+			EscribirINodo(super.SbAptrStartINodo, path, inodo)
+			super.SbBloqueFree = super.SbBloqueFree - 2
+			//Actualiza el bipmap del bloque
+			file.Seek(super.SbAptrStartBipmapBloque, 0)
+			var b5 bytes.Buffer
+			binary.Write(&b5, binary.BigEndian, &ocupado)
+			escribirBytes(file, b5.Bytes())
+			bloque1 := Bloque{}
+			bloque2 := Bloque{}
+			resto := 0
+			tam := len(cadena)
+			for i := 0; i < len(cadena); i++ {
+				if i < 25 {
+					bloque1.BDarray[i] = cadena[i]
+					resto = i
+				}
+			}
+			resto--
+			cad := tam - resto
+			for i := 0; i < cad; i++ {
+				bloque2.BDarray[i] = cadena[resto]
+				resto++
+			}
+			EscribirBloque(super.SbAptrStartBloque, path, bloque1)
+			EscribirBloque(super.SbAptrStartBloque+super.SbSizeStructBloque, path, bloque2)
+			super.SbFirstBitFreeAVD = super.SbAptrStartBipmapAVD + 1
+			super.SbFirstBitFreeDD = super.SbAptrStartBipmapDD + 1
+			super.SbFirstBitFreeINodo = super.SbAptrStartBipmapINodo + 1
+			super.SbFirstBitFreeBloque = super.SbAptrStartBipmapBloque + 2
+			EscribirSUPERBOOT(start, path, super)
+		}
+
+	}
+}
+
+//MkFile analiza los comandos que vienen después
+func MkFile(arreglo []string) {
+	id := ""
+	path := ""
+	crear := false
+	size := 0
+	cadena := ""
+	start := int64(0)
+	dir := ""
+	for i := 1; i < len(arreglo); i++ {
+		comandos := strings.Split(arreglo[i], "->")
+		com := strings.ToLower(comandos[0])
+		switch com {
+		case "-id":
+			start, dir = BuscarParticionM(strings.ToLower(comandos[1]))
+			if dir != "" && start != -1 {
+				id = strings.ToLower(comandos[1])
+
+			} else {
+				fmt.Println(colorRed, "El id de la partición no fue encontrado")
+				return
+			}
+			break
+		case "-path":
+			path = direccion(comandos[1])
+			if path != "" {
+
+			} else {
+				fmt.Println(colorRed, "Dirección inválida")
+			}
+			break
+		case "-p":
+			crear = true
+			break
+		case "-size":
+			n, err := strconv.Atoi(comandos[i])
+			if err != nil {
+				fmt.Println(colorRed, "Verifique el valor del size.")
+				return
+			}
+			size = n
+			break
+		case "-cont":
+			cadena = strings.ReplaceAll(comandos[i], "\"", "")
+
+			break
+		case "":
+			break
+		}
+	}
+
+	if id != "" && path != "" {
+		CrearArchivos(id, path, cadena, int64(size), crear, start, dir)
+	} else {
+		fmt.Println(colorRed, "Faltan parámetros obligatorios.")
+	}
+
+}
+
+//CrearArchivos verifica el archivo a crear
+func CrearArchivos(id string, path string, cont string, size int64, crear bool, start int64, dir string) {
+	b := false
+	super, b = LeerSUPERBOOT(start, dir)
+	if b {
+		direccion := strings.Split(path, "/")
+		archivo := direccion[len(direccion)-1]
+		var carpetas []string
+		for i := 0; i < (len(direccion) - 1); i++ {
+			carpetas[i] = direccion[i]
+		}
+		if direccion[0] == "" {
+			direccion[0] = "/"
+		} else {
+			fmt.Println(colorRed, "Dirección incorrecta")
+			return
+		}
+		avd, b := LeerAVD(super.SbAptrStartAVD, dir, super.SbSizeStructAVD)
+		if b {
+			var inicio int64
+			if crear {
+				inicio = CrearCarpeta(direccion[0], carpetas, avd, dir, 1, crear, start, super.SbSizeStructAVD)
+			} else {
+				inicio = buscarCarpeta(carpetas, direccion[0], avd, dir, 1, start, super.SbSizeStructAVD)
+			}
+			if inicio != -1 {
+				CrearDD(inicio, dir, archivo, cont, size)
+			} else {
+				fmt.Println(colorYellow, "No se ha encontrado el directorio solicitado")
+				return
+			}
+		}
+	}
+}
+
+//CrearDD hace los Detalle de directorio
+func CrearDD(AVDStart int64, path string, archivo string, cont string, size int64) {
+	avd, p := LeerAVD(AVDStart, path, super.SbSizeStructAVD)
+	if p {
+		if avd.AVDAptrDetalleDirectorio != 0 {
+
+		} else {
+			//Se crea un nuevo apuntador en la siguiente posición libre
+			op := ((super.SbAptrStartBipmapDD + super.SbDetalleDirectorioCount) - super.SbFirstBitFreeDD)
+			apuntador := (super.SbDetalleDirectorioCount - op) + 1
+			avd.AVDAptrDetalleDirectorio = apuntador
+			//Se modifica la información del AVD asignandole un valor a la celda de DD
+			EscribirAVD(AVDStart, path, avd)
+			//Se calcula el start de la esturctura del detalle de directorio
+			inicioDD := super.SbAptrStartDD + (super.SbSizeStructDD * (apuntador - 1))
+			//Se crea el nuevoDD que se va a meter en el archivo con todos sus datos
+			NuevoDD := DetalleDirectorio{}
+			t := time.Now()
+			fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+				t.Hour(), t.Minute(), t.Second())
+			copy(NuevoDD.DDArrayAptrINodo[0].DDFileDateCreation[:], fecha)
+			copy(NuevoDD.DDArrayAptrINodo[0].DDFileDateModificacion[:], fecha)
+			copy(NuevoDD.DDArrayAptrINodo[0].DDfileName[:], archivo)
+			//Se crea el apuntador nuevo del INODO
+			apuntadorInodo := (super.SbAptrStartBipmapINodo + super.SbINodoCount) - super.SbFirstBitFreeINodo
+			aInodo := super.SbINodoCount - apuntadorInodo + 1
+			//Se le asigna el apuntador
+			NuevoDD.DDArrayAptrINodo[0].DDAptrINodo = aInodo
+			//Se guarda el detalle de directorio en el archivo
+			EscribirDD(inicioDD, path, NuevoDD)
+			//Se actualiza el bipmap del DD
+			super.SbFirstBitFreeDD = actualizarBipmap(path, super.SbFirstBitFreeDD)
+			//Se actualiza el bipmap del inodo
+			super.SbFirstBitFreeINodo = actualizarBipmap(path, super.SbFirstBitFreeINodo)
+			comiendoInodo := super.SbAptrStartINodo + (super.SbSizeStructINodo * (aInodo - 1))
+			NuevoInodo := INodo{}
+			NuevoInodo.INodoNumero = aInodo
+			tamCad := 0
+			if cont != "" {
+				tamCad = len(cont)
+			}
+			if int64(tamCad) > size {
+				size = int64(tamCad)
+			}
+			redondear := float64(size / 25)
+			a := int64(Roundf(redondear))
+			NuevoInodo.INodoBloquesAsignados = a
+			NuevoInodo.INodoFileSize = size
+
+			for i := 0; i < 4; i++ {
+				NuevoInodo = CrearBloque(path, NuevoInodo, i, cont, size)
+				a--
+			}
+		}
+	}
+}
+
+//RetornarArreglo divide el contenido
+func RetornarArreglo(size int64) [25]byte {
+	var aux [25]byte
+
+	var letra byte = 65
+	var i int64
+	for i = 0; i < size; i++ {
+		aux[i] = letra
+		letra++
+		if letra == 91 {
+			letra = 65
+		}
+	}
+	return aux
+}
+
+//CrearBloque va creando los bloques depende del tamaño del archivo
+func CrearBloque(path string, NuevoInodo INodo, i int, contenido string, size int64) INodo {
+	apuntadorBloque := (super.SbAptrStartBipmapBloque + super.SbBloquesCount) - super.SbFirstBitFreeBloque
+	aBloque := super.SbBloquesCount - apuntadorBloque + 1
+	inicioBloque := super.SbAptrStartBloque + (super.SbSizeStructBloque * (aBloque - 1))
+	super.SbFirstBitFreeBloque = actualizarBipmap(path, super.SbFirstBitFreeBloque)
+	nuevoBloque := Bloque{}
+	NuevoInodo.INodoAptrDeBloque[i] = aBloque
+	//	copy(nuevoBloque.BDarray[:], contenido)
+	//Añade el bloque
+	if contenido != "" {
+
+	} else {
+		nuevoBloque.BDarray = RetornarArreglo(size)
+	}
+	EscribirBloque(inicioBloque, path, nuevoBloque)
+	return NuevoInodo
+}
+
+//Roundf dd
+func Roundf(x float64) float64 {
+	t := math.Trunc(x)
+	if math.Abs(x-t) >= 0 {
+		return t + math.Copysign(1, x)
+	}
+	return t
+}
+func actualizarBipmap(path string, primero int64) int64 {
+	file, err := os.OpenFile(path, os.O_RDWR, 0644)
+	defer file.Close()
+	if err != nil {
+		fmt.Println(colorRed, "No se encontró la ruta del archivo")
+
+	}
+	var ocupado byte = '1'
+	//Actualiza el bipmap
+	file.Seek(primero, 0)
+	var b3 bytes.Buffer
+	binary.Write(&b3, binary.BigEndian, &ocupado)
+	escribirBytes(file, b3.Bytes())
+
+	//Busca el siguiente bipmap desocupado
+
+	act := false
+	var cont int64 = 0
+	for !act {
+		var oc byte
+		file.Seek((primero + cont), 0)
+		data := readNextBytes(file, int(unsafe.Sizeof(oc)))
+		buffer := bytes.NewBuffer(data)
+		err = binary.Read(buffer, binary.BigEndian, &oc)
+		if err != nil {
+			panic(err)
+		}
+		if oc == 0 {
+			primero = primero + cont
+			act = true
+		}
+		cont++
+	}
+	return primero
+}
+
+func buscarCarpeta(carpetas []string, padre string, avd ArbolVirtualDirectorio, path string, siguiente int, ss int64, inicioAVD int64) int64 {
+
+	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+		if avd.AVDAptrArraySubdirectorios[i] != 0 {
+			avdAux, p := LeerAVD(super.SbAptrStartAVD+((avd.AVDAptrArraySubdirectorios[i]-1)*super.SbSizeStructAVD), path, super.SbSizeStructAVD)
+			if p {
+				if Nombres(avdAux.AVDNameDirectoy) == carpetas[siguiente] {
+					fmt.Println(avd)
+					padre = carpetas[siguiente]
+					if siguiente < len(carpetas)-1 {
+						siguiente++
+						inicioAVD = super.SbAptrStartAVD + ((avd.AVDAptrArraySubdirectorios[i] - 1) * super.SbSizeStructAVD)
+						return buscarCarpeta(carpetas, padre, avdAux, path, siguiente, ss, inicioAVD)
+					}
+					return inicioAVD
+
+				}
+			}
+		}
+
+	}
+	if avd.AVDAptrInd != 0 {
+		inicioAVD = super.SbAptrStartAVD + ((avd.AVDAptrInd - 1) * super.SbSizeStructAVD)
+		avdAux, p := LeerAVD(inicioAVD, path, super.SbSizeStructAVD)
+		if p {
+			buscarCarpeta(carpetas, padre, avdAux, path, siguiente, ss, inicioAVD)
+		}
+	}
+	return -1
+}
+
+//MkDir crear carpetas
+func MkDir(arreglo []string) {
+	id := ""
+	path := ""
+	crear := false
+	start := int64(0)
+	dir := ""
+	for i := 1; i < len(arreglo); i++ {
+		comandos := strings.Split(arreglo[i], "->")
+		com := strings.ToLower(comandos[0])
+		switch com {
+		case "-id":
+			start, dir = BuscarParticionM(strings.ToLower(comandos[1]))
+			if dir != "" && start != -1 {
+				id = strings.ToLower(comandos[1])
+
+			} else {
+				fmt.Println(colorRed, "El id de la partición no fue encontrado")
+				return
+			}
+			break
+		case "-path":
+			path = direccion(arreglo[i])
+			if path == "" {
+				fmt.Println(colorRed, "Dirección inválida")
+			}
+			break
+		case "-p":
+			crear = true
+			break
+
+		case "":
+			break
+		}
+	}
+
+	if id != "" && path != "" {
+		crearAC(id, path, crear, start, dir)
+	} else {
+		fmt.Println(colorRed, "Faltan parámetros obligatorios.")
+	}
+}
+
+//crearAC crear archivos y carpetas
+func crearAC(id string, path string, crear bool, start int64, dir string) {
+	carpetas := strings.Split(path, "/")
+	var a = false
+	super, a = LeerSUPERBOOT(start, dir)
+	if a {
+		avds := ArbolVirtualDirectorio{}
+		avds, aux := LeerAVD(super.SbAptrStartAVD, dir, super.SbSizeStructAVD)
+		if aux {
+			if carpetas[0] == "" {
+				carpetas[0] = "/"
+			}
+			CrearCarpeta(carpetas[0], carpetas, avds, dir, 1, crear, start, super.SbAptrStartAVD)
+			fmt.Println(colorGreen, "**************Información***************")
+			fmt.Println(colorGreen, " Se han creado las o la carpeta(s)")
+			fmt.Println(colorGreen, "****************************************")
+		}
+	}
+	GraficarDirectorio(id)
+
+}
+
+//CrearCarpeta se crean carpeta
+func CrearCarpeta(carpetaPadre string, conjCarpetas []string, avd ArbolVirtualDirectorio, path string, siguiente int, crear bool, ss int64, inicioAVD int64) int64 {
+	aux := 0
+
+	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+		if avd.AVDAptrArraySubdirectorios[i] != 0 {
+			aux++
+			avdAux, p := LeerAVD(super.SbAptrStartAVD+((avd.AVDAptrArraySubdirectorios[i]-1)*super.SbSizeStructAVD), path, super.SbSizeStructAVD)
+			if p {
+				if Nombres(avdAux.AVDNameDirectoy) == conjCarpetas[siguiente] {
+					carpetaPadre = conjCarpetas[siguiente]
+					if siguiente < len(conjCarpetas)-1 {
+						siguiente++
+						inicioAVD = super.SbAptrStartAVD + ((avd.AVDAptrArraySubdirectorios[i] - 1) * super.SbSizeStructAVD)
+						return CrearCarpeta(carpetaPadre, conjCarpetas, avdAux, path, siguiente, crear, ss, inicioAVD)
+					}
+					return inicioAVD
+
+				}
+			}
+		}
+	}
+	if avd.AVDAptrInd != 0 {
+		aux = 6
+	}
+	if aux == 6 {
+		if avd.AVDAptrInd != 0 {
+			inicioAVD = super.SbAptrStartAVD + ((avd.AVDAptrInd - 1) * super.SbSizeStructAVD)
+			avdAux, p := LeerAVD(inicioAVD, path, super.SbSizeStructAVD)
+			if p {
+				return CrearCarpeta(carpetaPadre, conjCarpetas, avdAux, path, siguiente, crear, ss, inicioAVD)
+			}
+		} else {
+			op := ((super.SbAptrStartBipmapAVD + super.SbAVDcount) - super.SbFirstBitFreeAVD)
+			apuntador := (super.SbAVDcount - op) + 1
+			//Se abre el archivo para actualizar bipmap
+			file, err := os.OpenFile(path, os.O_RDWR, 0644)
+			defer file.Close()
+			if err != nil {
+				fmt.Println(colorRed, "No se encontró la ruta del archivo")
+
+			}
+			var ocupado byte = '1'
+			//Actualiza el bipmap del avd
+			file.Seek(super.SbFirstBitFreeAVD, 0)
+			var b3 bytes.Buffer
+			binary.Write(&b3, binary.BigEndian, &ocupado)
+			escribirBytes(file, b3.Bytes())
+
+			//Busca el siguiente bipmap desocupado
+
+			act := false
+			var cont int64 = 0
+			for !act {
+				var oc byte
+				file.Seek((super.SbFirstBitFreeAVD + cont), 0)
+				data := readNextBytes(file, int(unsafe.Sizeof(oc)))
+				buffer := bytes.NewBuffer(data)
+				err = binary.Read(buffer, binary.BigEndian, &oc)
+				if err != nil {
+					panic(err)
+				}
+				if oc == 0 {
+					super.SbFirstBitFreeAVD = super.SbFirstBitFreeAVD + cont
+					act = true
+				}
+				cont++
+			}
+			avd.AVDAptrInd = apuntador
+			EscribirAVD(inicioAVD, path, avd)
+			nuevoAVD := ArbolVirtualDirectorio{}
+			t := time.Now()
+			fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+				t.Hour(), t.Minute(), t.Second())
+			copy(nuevoAVD.AVDFechaCreacion[:], fecha)
+			copy(nuevoAVD.AVDNameDirectoy[:], carpetaPadre)
+			inicioAVD = super.SbAptrStartAVD + (super.SbSizeStructAVD * (apuntador - 1))
+			EscribirAVD(inicioAVD, path, nuevoAVD)
+			super.SbAVDFree--
+			EscribirSUPERBOOT(ss, path, super)
+			return CrearCarpeta(carpetaPadre, conjCarpetas, nuevoAVD, path, siguiente, crear, ss, inicioAVD)
+
+		}
+	} else if crear == true && super.SbAVDFree != 0 {
+		for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+			if avd.AVDAptrArraySubdirectorios[i] == 0 {
+				op := ((super.SbAptrStartBipmapAVD + super.SbAVDcount) - super.SbFirstBitFreeAVD)
+				apuntador := (super.SbAVDcount - op) + 1
+				//Se abre el archivo para actualizar bipmap
+				file, err := os.OpenFile(path, os.O_RDWR, 0644)
+				defer file.Close()
+				if err != nil {
+					fmt.Println(colorRed, "No se encontró la ruta del archivo")
+
+				}
+				var ocupado byte = '1'
+				//Actualiza el bipmap del avd
+				file.Seek(super.SbFirstBitFreeAVD, 0)
+				var b3 bytes.Buffer
+				binary.Write(&b3, binary.BigEndian, &ocupado)
+				escribirBytes(file, b3.Bytes())
+
+				//Busca el siguiente bipmap desocupado
+
+				act := false
+				var cont int64 = 0
+				for !act {
+					var oc byte
+					file.Seek((super.SbFirstBitFreeAVD + cont), 0)
+					data := readNextBytes(file, int(unsafe.Sizeof(oc)))
+					buffer := bytes.NewBuffer(data)
+					err = binary.Read(buffer, binary.BigEndian, &oc)
+					if err != nil {
+						panic(err)
+					}
+					if oc == 0 {
+						super.SbFirstBitFreeAVD = super.SbFirstBitFreeAVD + cont
+						act = true
+					}
+					cont++
+				}
+				avd.AVDAptrArraySubdirectorios[i] = apuntador
+				EscribirAVD(inicioAVD, path, avd)
+				nuevoAVD := ArbolVirtualDirectorio{}
+				t := time.Now()
+				fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+					t.Hour(), t.Minute(), t.Second())
+				copy(nuevoAVD.AVDFechaCreacion[:], fecha)
+				copy(nuevoAVD.AVDNameDirectoy[:], conjCarpetas[siguiente])
+				inicioAVD = super.SbAptrStartAVD + (super.SbSizeStructAVD * (apuntador - 1))
+				EscribirAVD(inicioAVD, path, nuevoAVD)
+				super.SbAVDFree--
+				EscribirSUPERBOOT(ss, path, super)
+				if siguiente < len(conjCarpetas)-1 {
+					carpetaPadre = conjCarpetas[siguiente]
+					siguiente++
+					return CrearCarpeta(carpetaPadre, conjCarpetas, nuevoAVD, path, siguiente, crear, ss, inicioAVD)
+
+				}
+				return inicioAVD
+
+			}
+		}
+	} else {
+		fmt.Println(colorRed, "No existe el directorio: "+conjCarpetas[siguiente])
+		return -1
+	}
+	return -1
+}
+
+//GraficarDirectorio hace la gráfica de los avd
+func GraficarDirectorio(nombre string) {
+	dir := "/home/josselyn/Escritorio/Directorios.txt"
+	var _, errr = os.Stat(dir)
+	//Crea el archivo si no existe
+	if os.IsNotExist(errr) {
+		var file, errr = os.Create(dir)
+		if existeError(errr) {
+			return
+		}
+		defer file.Close()
+	}
+	start, path := BuscarParticionM(nombre)
+	auxi := false
+	super = SUPERBOOT{}
+	super, auxi = LeerSUPERBOOT(start, path)
+	if start != -1 && auxi {
+		cadena := ""
+		cadena += "digraph G {\ngraph [pad=\"0.5\", nodesep=\"1\", ranksep=\"2\"];"
+		cadena += "\nnode [shape=plain]\n rankdir=LR\n"
+		avd, act := LeerAVD(super.SbAptrStartAVD, path, super.SbSizeStructAVD)
+		if act {
+			cadena += GraficarDIR(avd, "AVD", 1, path)
+			cadena += UniverDir(path, 1, avd)
+			cadena += "}"
+			errrr := ioutil.WriteFile(dir, []byte(cadena[:]), 0644)
+			if errrr != nil {
+				panic(errrr)
+			}
+			com1 := "dot"
+			com2 := "-Tpng"
+			com3 := dir
+			com4 := "-o"
+			com5 := "/home/josselyn/Escritorio/Directorios.png"
+			exec.Command(com1, com2, com3, com4, com5).Output()
+			fmt.Println(colorGreen, "Success")
+		}
+	}
+}
+
+//GraficarDIR reportes de las carpetas
+func GraficarDIR(avd ArbolVirtualDirectorio, nodo string, cont int, path string) string {
+	cadena := nodo + strconv.Itoa(cont)
+	cadena += "[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
+	cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + "AVD" + strconv.Itoa(cont) + " \"" + string(avd.AVDFechaCreacion[:]) + "\"" + "</i></td></tr>\n"
+	cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + Nombres(avd.AVDNameDirectoy) + "</i></td></tr>\n"
+	cadena += "<tr><td bgcolor=\"#D7BDE2\">Aptr1</td><td bgcolor=\"#D7BDE2\">Aptr2</td><td bgcolor=\"#D7BDE2\">Aptr3</td><td bgcolor=\"#D7BDE2\">Aptr4</td><td bgcolor=\"#D7BDE2\">Aptr5</td><td bgcolor=\"#D7BDE2\">Aptr6</td><td bgcolor=\"#D7BDE2\">AptrDD</td><td bgcolor=\"#D7BDE2\">AptrInd</td></tr>\n"
+	cadena += "<tr>\n"
+	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+		if avd.AVDAptrArraySubdirectorios[i] == 0 {
+			cadena += "<td> </td>"
+		} else {
+			cadena += "<td>" + strconv.Itoa(int(avd.AVDAptrArraySubdirectorios[i])) + "</td>\n"
+		}
+	}
+	if avd.AVDAptrDetalleDirectorio != 0 {
+		cadena += "<td>" + strconv.Itoa(int(avd.AVDAptrDetalleDirectorio)) + "</td>\n"
+	} else {
+		cadena += "<td> </td>\n"
+	}
+	if avd.AVDAptrInd != 0 {
+		cadena += "<td bgcolor=\"#D2B4DE\">" + strconv.Itoa(int(avd.AVDAptrInd)) + "</td>\n"
+	} else {
+		cadena += "<td bgcolor=\"#D2B4DE\"> </td>\n"
+	}
+	cadena += "</tr>\n"
+	cadena += "</table>>];\n"
+
+	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+		if avd.AVDAptrArraySubdirectorios[i] != 0 {
+			pos := super.SbAptrStartAVD + (super.SbSizeStructAVD * (avd.AVDAptrArraySubdirectorios[i] - 1))
+			avdaux, ac := LeerAVD(pos, path, super.SbSizeStructAVD)
+			if ac {
+				cont = int(avd.AVDAptrArraySubdirectorios[i])
+				cadena += GraficarDIR(avdaux, nodo, cont, path)
+
+			}
+		}
+	}
+	if avd.AVDAptrInd != 0 {
+		pos := super.SbAptrStartAVD + (super.SbSizeStructAVD * (avd.AVDAptrInd - 1))
+		avdaux, ac := LeerAVD(pos, path, super.SbSizeStructAVD)
+		if ac {
+			cont = int(avd.AVDAptrInd)
+			cadena += GraficarDIR(avdaux, nodo, cont, path)
+		}
+	}
+	return cadena
+}
+
+//UniverDir hace la union entre directorios
+func UniverDir(path string, c int, avd ArbolVirtualDirectorio) string {
+	cad := ""
+	//	avd, aux := LeerAVD(super.SbAptrStartAVD, path, super.SbSizeStructAVD)
+
+	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+		if avd.AVDAptrArraySubdirectorios[i] != 0 {
+			cad += "AVD" + strconv.Itoa(c) + "->"
+			cad += "AVD" + strconv.Itoa(int(avd.AVDAptrArraySubdirectorios[i])) + ";\n"
+		}
+	}
+	if avd.AVDAptrInd != 0 {
+		cad += "AVD" + strconv.Itoa(c) + "->"
+		cad += "AVD" + strconv.Itoa(int(avd.AVDAptrInd)) + ";\n"
+	}
+	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+		if avd.AVDAptrArraySubdirectorios[i] != 0 {
+			pos := super.SbAptrStartAVD + (super.SbSizeStructAVD * (avd.AVDAptrArraySubdirectorios[i] - 1))
+			avdaux, ac := LeerAVD(pos, path, super.SbSizeStructAVD)
+			if ac {
+				cad += UniverDir(path, int(avd.AVDAptrArraySubdirectorios[i]), avdaux)
+			}
+		}
+
+	}
+	if avd.AVDAptrInd != 0 {
+		pos := super.SbAptrStartAVD + (super.SbSizeStructAVD * (avd.AVDAptrInd - 1))
+		avdaux, ac := LeerAVD(pos, path, super.SbSizeStructAVD)
+		if ac {
+			cad += UniverDir(path, int(avd.AVDAptrInd), avdaux)
+		}
+	}
+	return cad
 }
