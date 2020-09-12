@@ -3075,56 +3075,120 @@ func CrearDD(AVDStart int64, path string, archivo string, cont string, size int6
 	avd, p := LeerAVD(AVDStart, path, super.SbSizeStructAVD)
 	if p {
 		if avd.AVDAptrDetalleDirectorio != 0 {
+			inicioDD := super.SbAptrStartDD + (super.SbSizeStructDD * (avd.AVDAptrDetalleDirectorio - 1))
+			dd := LeerDD(inicioDD, path, super.SbSizeStructDD)
+			for i := 0; i < len(dd.DDArrayAptrINodo); i++ {
+				var vacio [20]byte
+				if dd.DDArrayAptrINodo[i].DDfileName == vacio {
+					CrearDDInodo(avd, AVDStart, path, archivo, cont, size, i)
+					return
+				}
+			}
+			if dd.DDAptrIndirecto != 0 {
+				op := ((super.SbAptrStartBipmapDD + super.SbDetalleDirectorioCount) - super.SbFirstBitFreeDD)
+				apuntador := (super.SbDetalleDirectorioCount - op) + 1
+				dd.DDAptrIndirecto = apuntador
 
+			} else {
+
+			}
 		} else {
-			//Se crea un nuevo apuntador en la siguiente posición libre
-			op := ((super.SbAptrStartBipmapDD + super.SbDetalleDirectorioCount) - super.SbFirstBitFreeDD)
-			apuntador := (super.SbDetalleDirectorioCount - op) + 1
-			avd.AVDAptrDetalleDirectorio = apuntador
-			//Se modifica la información del AVD asignandole un valor a la celda de DD
-			EscribirAVD(AVDStart, path, avd)
-			//Se calcula el start de la esturctura del detalle de directorio
-			inicioDD := super.SbAptrStartDD + (super.SbSizeStructDD * (apuntador - 1))
-			//Se crea el nuevoDD que se va a meter en el archivo con todos sus datos
-			NuevoDD := DetalleDirectorio{}
-			t := time.Now()
-			fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
-				t.Hour(), t.Minute(), t.Second())
-			copy(NuevoDD.DDArrayAptrINodo[0].DDFileDateCreation[:], fecha)
-			copy(NuevoDD.DDArrayAptrINodo[0].DDFileDateModificacion[:], fecha)
-			copy(NuevoDD.DDArrayAptrINodo[0].DDfileName[:], archivo)
-			//Se crea el apuntador nuevo del INODO
-			apuntadorInodo := (super.SbAptrStartBipmapINodo + super.SbINodoCount) - super.SbFirstBitFreeINodo
-			aInodo := super.SbINodoCount - apuntadorInodo + 1
-			//Se le asigna el apuntador
-			NuevoDD.DDArrayAptrINodo[0].DDAptrINodo = aInodo
-			//Se guarda el detalle de directorio en el archivo
-			EscribirDD(inicioDD, path, NuevoDD)
-			//Se actualiza el bipmap del DD
-			super.SbFirstBitFreeDD = actualizarBipmap(path, super.SbFirstBitFreeDD)
-			//Se actualiza el bipmap del inodo
-			super.SbFirstBitFreeINodo = actualizarBipmap(path, super.SbFirstBitFreeINodo)
-			comiendoInodo := super.SbAptrStartINodo + (super.SbSizeStructINodo * (aInodo - 1))
-			NuevoInodo := INodo{}
-			NuevoInodo.INodoNumero = aInodo
-			tamCad := 0
-			if cont != "" {
-				tamCad = len(cont)
-			}
-			if int64(tamCad) > size {
-				size = int64(tamCad)
-			}
-			redondear := float64(size / 25)
-			a := int64(Roundf(redondear))
-			NuevoInodo.INodoBloquesAsignados = a
-			NuevoInodo.INodoFileSize = size
-
-			for i := 0; i < 4; i++ {
-				NuevoInodo = CrearBloque(path, NuevoInodo, i, cont, size)
-				a--
-			}
+			CrearDDInodo(avd, AVDStart, path, archivo, cont, size, 0)
+			return
 		}
 	}
+}
+
+//CrearDDInodo crea los archivos
+func CrearDDInodo(avd ArbolVirtualDirectorio, AVDStart int64, path string, archivo string, cont string, size int64, posicion int) {
+	//Se crea un nuevo apuntador en la siguiente posición libre de DD
+	op := ((super.SbAptrStartBipmapDD + super.SbDetalleDirectorioCount) - super.SbFirstBitFreeDD)
+	apuntador := (super.SbDetalleDirectorioCount - op) + 1
+	avd.AVDAptrDetalleDirectorio = apuntador
+	//Se modifica la información del AVD asignandole un valor a la celda de DD
+	EscribirAVD(AVDStart, path, avd)
+	//Se calcula el start de la esturctura del detalle de directorio
+	inicioDD := super.SbAptrStartDD + (super.SbSizeStructDD * (apuntador - 1))
+	//Se crea el nuevoDD que se va a meter en el archivo con todos sus datos
+	NuevoDD := DetalleDirectorio{}
+	t := time.Now()
+	fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	copy(NuevoDD.DDArrayAptrINodo[posicion].DDFileDateCreation[:], fecha)
+	copy(NuevoDD.DDArrayAptrINodo[posicion].DDFileDateModificacion[:], fecha)
+	copy(NuevoDD.DDArrayAptrINodo[posicion].DDfileName[:], archivo)
+	//Se crea el apuntador nuevo del INODO
+	apuntadorInodo := (super.SbAptrStartBipmapINodo + super.SbINodoCount) - super.SbFirstBitFreeINodo
+	aInodo := super.SbINodoCount - apuntadorInodo + 1
+	//Se le asigna el apuntador
+	NuevoDD.DDArrayAptrINodo[posicion].DDAptrINodo = aInodo
+	//Se guarda el detalle de directorio en el archivo
+	EscribirDD(inicioDD, path, NuevoDD)
+	//Se actualiza el bipmap del DD
+	super.SbFirstBitFreeDD = actualizarBipmap(path, super.SbFirstBitFreeDD)
+	//Se actualiza el bipmap del inodo
+	super.SbFirstBitFreeINodo = actualizarBipmap(path, super.SbFirstBitFreeINodo)
+	comienzoInodo := super.SbAptrStartINodo + (super.SbSizeStructINodo * (aInodo - 1))
+	NuevoInodo := INodo{}
+	NuevoInodo.INodoNumero = aInodo
+	tamCad := 0
+	if cont != "" {
+		tamCad = len(cont)
+	}
+	if int64(tamCad) > size {
+		size = int64(tamCad)
+	}
+	redondear := float64(size / 25)
+	a := int64(Roundf(redondear))
+	NuevoInodo.INodoBloquesAsignados = a
+	NuevoInodo.INodoFileSize = size
+	auxi := a
+	for i := 0; i < 4; i++ {
+		var cad [25]byte
+		cad, cont = dividirCadena(cont)
+		NuevoInodo = CrearBloque(path, NuevoInodo, i, cad)
+		a--
+	}
+	if a != 0 {
+		apuntadorInodoind := (super.SbAptrStartBipmapINodo + super.SbINodoCount) - super.SbFirstBitFreeINodo
+		aInodoind := super.SbINodoCount - apuntadorInodoind + 1
+		NuevoInodo.INodoAptrInd = aInodoind
+		EscribirINodo(comienzoInodo, path, NuevoInodo)
+		CrearINodo(path, cont, size, NuevoInodo.INodoNumero, aInodoind, auxi)
+	}
+}
+
+//CrearINodo crea todos los inodos que se necesiten
+func CrearINodo(path string, cont string, size int64, numero int64, aptrind int64, a int64) {
+	comienzoInodo := super.SbAptrStartINodo + (super.SbSizeStructINodo * (aptrind - 1))
+	NuevoInodo := INodo{}
+	NuevoInodo.INodoNumero = numero
+	NuevoInodo.INodoBloquesAsignados = a
+	NuevoInodo.INodoFileSize = size
+	auxi := a
+	for i := 0; i < 4; i++ {
+		var cad [25]byte
+		cad, cont = dividirCadena(cont)
+		NuevoInodo = CrearBloque(path, NuevoInodo, i, cad)
+		a--
+	}
+	if a != 0 {
+		apuntadorInodoind := (super.SbAptrStartBipmapINodo + super.SbINodoCount) - super.SbFirstBitFreeINodo
+		aInodoind := super.SbINodoCount - apuntadorInodoind + 1
+		NuevoInodo.INodoAptrInd = aInodoind
+		super.SbFirstBitFreeINodo = actualizarBipmap(path, super.SbFirstBitFreeINodo)
+		EscribirINodo(comienzoInodo, path, NuevoInodo)
+		CrearINodo(path, cont, size, NuevoInodo.INodoNumero, aInodoind, auxi)
+	}
+}
+func dividirCadena(cadena string) (cad [25]byte, resto string) {
+	noSeUsa := ""
+	for i := 0; i < len(cadena); i++ {
+		noSeUsa += string(rune(cadena[i]))
+		cad[i] = cadena[i]
+	}
+	resto = strings.Replace(cadena, noSeUsa, "", 1)
+	return cad, resto
 }
 
 //RetornarArreglo divide el contenido
@@ -3144,20 +3208,15 @@ func RetornarArreglo(size int64) [25]byte {
 }
 
 //CrearBloque va creando los bloques depende del tamaño del archivo
-func CrearBloque(path string, NuevoInodo INodo, i int, contenido string, size int64) INodo {
+func CrearBloque(path string, NuevoInodo INodo, i int, arreglo [25]byte) INodo {
 	apuntadorBloque := (super.SbAptrStartBipmapBloque + super.SbBloquesCount) - super.SbFirstBitFreeBloque
 	aBloque := super.SbBloquesCount - apuntadorBloque + 1
 	inicioBloque := super.SbAptrStartBloque + (super.SbSizeStructBloque * (aBloque - 1))
 	super.SbFirstBitFreeBloque = actualizarBipmap(path, super.SbFirstBitFreeBloque)
 	nuevoBloque := Bloque{}
 	NuevoInodo.INodoAptrDeBloque[i] = aBloque
-	//	copy(nuevoBloque.BDarray[:], contenido)
 	//Añade el bloque
-	if contenido != "" {
-
-	} else {
-		nuevoBloque.BDarray = RetornarArreglo(size)
-	}
+	nuevoBloque.BDarray = arreglo
 	EscribirBloque(inicioBloque, path, nuevoBloque)
 	return NuevoInodo
 }
@@ -3338,38 +3397,7 @@ func CrearCarpeta(carpetaPadre string, conjCarpetas []string, avd ArbolVirtualDi
 			op := ((super.SbAptrStartBipmapAVD + super.SbAVDcount) - super.SbFirstBitFreeAVD)
 			apuntador := (super.SbAVDcount - op) + 1
 			//Se abre el archivo para actualizar bipmap
-			file, err := os.OpenFile(path, os.O_RDWR, 0644)
-			defer file.Close()
-			if err != nil {
-				fmt.Println(colorRed, "No se encontró la ruta del archivo")
-
-			}
-			var ocupado byte = '1'
-			//Actualiza el bipmap del avd
-			file.Seek(super.SbFirstBitFreeAVD, 0)
-			var b3 bytes.Buffer
-			binary.Write(&b3, binary.BigEndian, &ocupado)
-			escribirBytes(file, b3.Bytes())
-
-			//Busca el siguiente bipmap desocupado
-
-			act := false
-			var cont int64 = 0
-			for !act {
-				var oc byte
-				file.Seek((super.SbFirstBitFreeAVD + cont), 0)
-				data := readNextBytes(file, int(unsafe.Sizeof(oc)))
-				buffer := bytes.NewBuffer(data)
-				err = binary.Read(buffer, binary.BigEndian, &oc)
-				if err != nil {
-					panic(err)
-				}
-				if oc == 0 {
-					super.SbFirstBitFreeAVD = super.SbFirstBitFreeAVD + cont
-					act = true
-				}
-				cont++
-			}
+			super.SbFirstBitFreeAVD = actualizarBipmap(path, super.SbFirstBitFreeAVD)
 			avd.AVDAptrInd = apuntador
 			EscribirAVD(inicioAVD, path, avd)
 			nuevoAVD := ArbolVirtualDirectorio{}
@@ -3391,38 +3419,7 @@ func CrearCarpeta(carpetaPadre string, conjCarpetas []string, avd ArbolVirtualDi
 				op := ((super.SbAptrStartBipmapAVD + super.SbAVDcount) - super.SbFirstBitFreeAVD)
 				apuntador := (super.SbAVDcount - op) + 1
 				//Se abre el archivo para actualizar bipmap
-				file, err := os.OpenFile(path, os.O_RDWR, 0644)
-				defer file.Close()
-				if err != nil {
-					fmt.Println(colorRed, "No se encontró la ruta del archivo")
-
-				}
-				var ocupado byte = '1'
-				//Actualiza el bipmap del avd
-				file.Seek(super.SbFirstBitFreeAVD, 0)
-				var b3 bytes.Buffer
-				binary.Write(&b3, binary.BigEndian, &ocupado)
-				escribirBytes(file, b3.Bytes())
-
-				//Busca el siguiente bipmap desocupado
-
-				act := false
-				var cont int64 = 0
-				for !act {
-					var oc byte
-					file.Seek((super.SbFirstBitFreeAVD + cont), 0)
-					data := readNextBytes(file, int(unsafe.Sizeof(oc)))
-					buffer := bytes.NewBuffer(data)
-					err = binary.Read(buffer, binary.BigEndian, &oc)
-					if err != nil {
-						panic(err)
-					}
-					if oc == 0 {
-						super.SbFirstBitFreeAVD = super.SbFirstBitFreeAVD + cont
-						act = true
-					}
-					cont++
-				}
+				super.SbFirstBitFreeAVD = actualizarBipmap(path, super.SbFirstBitFreeAVD)
 				avd.AVDAptrArraySubdirectorios[i] = apuntador
 				EscribirAVD(inicioAVD, path, avd)
 				nuevoAVD := ArbolVirtualDirectorio{}
