@@ -49,8 +49,8 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
 	eleccion := strings.TrimRight(entrada, "\r\n")
-	f := "mount -path->/home/josselyn/Escritorio/archivoBinario/disco.dsk -name->particion8\n"
-	f += "rep -id->vda1 -Path->/home/Prueba/reporteDisk1.png -name->disk"
+	f := "mount -path->/home/Prueba/Disco1.dsk -name->Particion1\n"
+	f += "rep -id->vda1 -Path->/home/Prueba/reporteMBR3.png -name->mbr"
 	Analizador(eleccion + "$$")
 	for eleccion != "exit" {
 		fmt.Print(colorBlanco, "\nIntroduzca un comando----:: ")
@@ -1717,51 +1717,42 @@ func graficarMBR(path string, ubicacion string) {
 			}
 			defer file.Close()
 		}
+		mbr, d := LeerMBR(path)
+		if d {
+			var cadena string = ""
+			cadena += "digraph G {\ngraph [pad=\"0.5\", nodesep=\"1\", ranksep=\"2\"];"
+			cadena += "\nnode [shape=plain]\nrankdir=LR;\n"
+			cadena += "Tabla[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
+			cadena += "<tr><td><i>Nombre</i></td>\n<td><i>Valor</i> </td>\n</tr>"
 
-		cadena := ""
-		cadena += "digraph G {\ngraph [pad=\"0.5\", nodesep=\"1\", ranksep=\"2\"];"
-		cadena += "\nnode [shape=plain]\nrankdir=LR;\n"
-		cadena += "Tabla[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
-		cadena += "<tr><td><i>Nombre</i></td>\n<td><i>Valor</i> </td>\n</tr>"
+			cadena += "<tr><td>Mbr_sizeDisk</td><td>" + strconv.Itoa(int(mbr.MbrTam)) + "</td></tr>\n"
+			cadena += "<tr><td>Mbr_FechaCreacion</td><td>" + string(mbr.MbrFechaCreacion[:]) + "</td></tr>\n"
+			cadena += "<tr><td>Mbr_DiskSignature</td><td>" + strconv.Itoa(int(mbr.MbrDiskID)) + "</td></tr>\n"
 
-		LeerMBR(path)
-
-		cadena += "<tr><td>Mbr_sizeDisk</td><td>" + strconv.Itoa(int(mbr.MbrTam)) + "</td></tr>\n"
-		cadena += "<tr><td>Mbr_FechaCreacion</td><td>" + string(mbr.MbrFechaCreacion[:]) + "</td></tr>\n"
-		cadena += "<tr><td>Mbr_DiskSignature</td><td>" + strconv.Itoa(int(mbr.MbrDiskID)) + "</td></tr>\n"
-
-		for i := 0; i < len(mbr.Particiones); i++ {
-			nombre := ""
-			for j := 0; j < len(mbr.Particiones[i].PartName); j++ {
-				if mbr.Particiones[i].PartName[j] != 0 {
-					nombre += string(rune(mbr.Particiones[i].PartName[j]))
-				} else {
-					break
+			for i := 0; i < len(mbr.Particiones); i++ {
+				nombre := Nombres(mbr.Particiones[i].PartName)
+				if nombre != "" {
+					cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Name</td><td>" + nombre + "</td></tr>\n"
+					cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Size</td><td>" + strconv.Itoa(int(mbr.Particiones[i].PartSize)) + "</td></tr>\n"
+					cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Start</td><td>" + strconv.Itoa(int(mbr.Particiones[i].PartStart)) + "</td></tr>\n"
+					cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Status</td><td>" + string(rune(mbr.Particiones[i].PartStatus)) + "</td></tr>\n"
+					cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Fit</td><td>" + string(rune(mbr.Particiones[i].PartFit)) + "</td></tr>\n"
+					cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Type</td><td>" + string(rune(mbr.Particiones[i].PartType)) + "</td></tr>\n"
 				}
 			}
-			if nombre == "" {
-				nombre = "---"
+			cadena += "</table>>];}"
+			errrr := ioutil.WriteFile(dirdoc, []byte(cadena[:]), 0644)
+			if errrr != nil {
+				panic(errrr)
 			}
-			cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Name</td><td>" + nombre + "</td></tr>\n"
-			cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Size</td><td>" + strconv.Itoa(int(mbr.Particiones[i].PartSize)) + "</td></tr>\n"
-			cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Start</td><td>" + strconv.Itoa(int(mbr.Particiones[i].PartStart)) + "</td></tr>\n"
-			cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Status</td><td>" + string(rune(mbr.Particiones[i].PartStatus)) + "</td></tr>\n"
-			cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Fit</td><td>" + string(rune(mbr.Particiones[i].PartFit)) + "</td></tr>\n"
-			cadena += "<tr><td>Part" + strconv.Itoa((i + 1)) + "_Type</td><td>" + string(rune(mbr.Particiones[i].PartType)) + "</td></tr>\n"
+			com1 := "dot"
+			com2 := "-T" + strings.ToLower(extension[1])
+			com3 := dirdoc
+			com4 := "-o"
+			com5 := dd
+			exec.Command(com1, com2, com3, com4, com5).Output()
+			fmt.Println(colorGreen, "Se ha graficado el MBR")
 		}
-
-		cadena += "</table>>];}"
-		errrr := ioutil.WriteFile(dirdoc, []byte(cadena[:]), 0644)
-		if errrr != nil {
-			panic(errrr)
-		}
-		com1 := "dot"
-		com2 := "-T" + strings.ToLower(extension[1])
-		com3 := dirdoc
-		com4 := "-o"
-		com5 := dd
-		exec.Command(com1, com2, com3, com4, com5).Output()
-		fmt.Println(colorGreen, "Success")
 	}
 }
 func existeError(err error) bool {
@@ -2054,6 +2045,25 @@ func ListaDiscoVacia() bool {
 	}
 	return false
 }
+func buscarMontada(nombre string, nombreDisco string) bool {
+	var aux *NodoDisco
+	aux = ListDiscos.inicio
+	for aux != nil {
+		if aux.Nombre == nombreDisco {
+			var auxi2 *NodoParticion
+			auxi2 = aux.listaParticiones.inicio
+			for auxi2 != nil {
+				if Nombres(auxi2.name) == nombre {
+					return true
+				}
+				auxi2 = auxi2.siguiente
+			}
+			return false
+		}
+		aux = aux.siguiente
+	}
+	return false
+}
 
 //AgregarDisco este metodo mete el disco a la lista
 func AgregarDisco(path string, nombreParticion string) {
@@ -2103,55 +2113,60 @@ func AgregarDisco(path string, nombreParticion string) {
 		} else if (PE || log) && ExisteArchivo(path) {
 			array := strings.Split(path, "/")
 			nombre := array[len(array)-1]
-
-			var auxiliar *NodoDisco
-			auxiliar = ListDiscos.inicio
-			a1 := false
-			for auxiliar != nil {
-				if auxiliar.Nombre == nombre {
-					PosListaParticion(auxiliar.listaParticiones, nombreParticion, string(rune(auxiliar.Letra)), PE, log, i)
-					a1 = true
-					break
-				}
-			}
-
-			if !a1 {
-				var auxiliar2 *NodoDisco
-				auxiliar2 = ListDiscos.inicio
-				for auxiliar2.siguiente != nil {
-					auxiliar2 = auxiliar2.siguiente
-				}
-				auxiliar2.siguiente.Letra = auxiliar2.Letra + 1
-				array := strings.Split(path, "/")
-				nombre := array[len(array)-1]
-				auxiliar2.siguiente.Nombre = nombre
-				auxiliar2.siguiente.path = path
-				//Llenar lista de particion
-				var listParticion ListaParticion
-				listParticion.inicio.numero = 1
-				if PE {
-					listParticion.inicio.part = mbr.Particiones[i]
-					if mbr.Particiones[i].PartType == 'p' {
-						listParticion.inicio.tipo = "primaria"
+			if !buscarMontada(nombreParticion, nombre) {
+				var auxiliar *NodoDisco
+				auxiliar = ListDiscos.inicio
+				a1 := false
+				for auxiliar != nil {
+					if auxiliar.Nombre == nombre {
+						PosListaParticion(auxiliar.listaParticiones, nombreParticion, string(rune(auxiliar.Letra)), PE, log, i)
+						a1 = true
+						break
 					}
-				} else if log {
-					listParticion.inicio.ebr = ebr
-					listParticion.inicio.tipo = "logica"
 				}
-				t := time.Now()
-				fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
-					t.Hour(), t.Minute(), t.Second())
-				copy(listParticion.inicio.fecha[:], fecha)
-				copy(listParticion.inicio.name[:], nombreParticion)
-				listParticion.inicio.nombreMontada = "vd" + string(rune(auxiliar2.siguiente.Letra+1)) + "1"
-				ListDiscos.inicio.listaParticiones = listParticion
-				ListDiscos.inicio.siguiente = nil
-				fmt.Println(colorGreen, "**************Información**************")
-				fmt.Println(colorGreen, "Se ha montado la partición exitosamente")
+
+				if !a1 {
+					var auxiliar2 *NodoDisco
+					auxiliar2 = ListDiscos.inicio
+					for auxiliar2.siguiente != nil {
+						auxiliar2 = auxiliar2.siguiente
+					}
+					auxiliar2.siguiente.Letra = auxiliar2.Letra + 1
+					array := strings.Split(path, "/")
+					nombre := array[len(array)-1]
+					auxiliar2.siguiente.Nombre = nombre
+					auxiliar2.siguiente.path = path
+					//Llenar lista de particion
+					var listParticion ListaParticion
+					listParticion.inicio.numero = 1
+					if PE {
+						listParticion.inicio.part = mbr.Particiones[i]
+						if mbr.Particiones[i].PartType == 'p' {
+							listParticion.inicio.tipo = "primaria"
+						}
+					} else if log {
+						listParticion.inicio.ebr = ebr
+						listParticion.inicio.tipo = "logica"
+					}
+					t := time.Now()
+					fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
+						t.Hour(), t.Minute(), t.Second())
+					copy(listParticion.inicio.fecha[:], fecha)
+					copy(listParticion.inicio.name[:], nombreParticion)
+					listParticion.inicio.nombreMontada = "vd" + string(rune(auxiliar2.siguiente.Letra+1)) + "1"
+					ListDiscos.inicio.listaParticiones = listParticion
+					ListDiscos.inicio.siguiente = nil
+					fmt.Println(colorGreen, "**************Información**************")
+					fmt.Println(colorGreen, "Se ha montado la partición exitosamente")
+				}
+			} else {
+				fmt.Println(colorYellow, "La partición "+nombreParticion+" ya está montada")
+				return
 			}
 		} else {
 			fmt.Println(colorRed, "Verifique el nombre y tipo de partición")
 		}
+
 	}
 }
 
@@ -3830,4 +3845,53 @@ func GraficarBitMap(rutaUbicacion string, comienzo int64, tam int64, path string
 		return
 	}
 	fmt.Println("Se ha creado el reporte de bitmap existosamente.")
+}
+
+//GraficarCompleto grafica toda esa onda xd
+func GraficarCompleto(dirDisco string, startSuper int64, ubicacion string) {
+	dir := ""
+	rutas := strings.Split(ubicacion, "/")
+	for i := 0; i < len(rutas)-1; i++ {
+		dir += rutas[i] + "/"
+	}
+	nombre := rutas[len(rutas)-1]
+	extension := strings.Split(nombre, ".")
+
+	if AnalizarRuta(dir) {
+
+		dir = dir + extension[0] + ".txt"
+		var _, errr = os.Stat(dir)
+		//Crea el archivo si no existe
+		if os.IsNotExist(errr) {
+			var file, errr = os.Create(dir)
+			if existeError(errr) {
+				return
+			}
+			defer file.Close()
+		}
+		super, b := LeerSUPERBOOT(startSuper, dirDisco)
+		if b {
+			cadena := ""
+			cadena += "digraph G {\ngraph [pad=\"0.5\", nodesep=\"1\", ranksep=\"2\"];"
+			cadena += "\nnode [shape=plain]\n rankdir=LR\n"
+			avd, act := LeerAVD(super.SbAptrStartAVD, dirDisco, super.SbSizeStructAVD)
+			if act {
+				cadena += GraficarDIR(avd, "AVD", 1, dirDisco)
+				cadena += UniverDir(dirDisco, 1, avd)
+
+				cadena += "}"
+				errrr := ioutil.WriteFile(dir, []byte(cadena[:]), 0644)
+				if errrr != nil {
+					panic(errrr)
+				}
+				com1 := "dot"
+				com2 := "-T" + strings.ToLower(extension[1])
+				com3 := dir
+				com4 := "-o"
+				com5 := ubicacion
+				exec.Command(com1, com2, com3, com4, com5).Output()
+				fmt.Println(colorGreen, "Success")
+			}
+		}
+	}
 }
