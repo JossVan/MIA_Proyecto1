@@ -51,7 +51,7 @@ func main() {
 	eleccion := strings.TrimRight(entrada, "\r\n")
 	f := "mount -path->/home/josselyn/Escritorio/archivoBinario/disco.dsk -name->particion8\n"
 	//	f += "mkfs -id->vda1 -type->full\n"
-	f += "mkfile -id->vda1 -path->/home/bin/hola/mia/prueba/OTRAPRUEBA33.PDF -size->300"
+	f += "rep -name->tree_directorio -path->\"/home/josselyn/carpeta de prueba2/directorios.png\" -id->vda1 -ruta->/home/user/docs/usacdasdasda"
 	//	f += "rep -name->tree_complete -path->\"/home/josselyn/carpetita de prueba/tree.png\" -id->vda1"
 	Analizador(f + "$$")
 	for eleccion != "exit" {
@@ -3812,12 +3812,12 @@ func UniverDir(path string, c int, avd ArbolVirtualDirectorio) string {
 
 	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
 		if avd.AVDAptrArraySubdirectorios[i] != 0 {
-			cad += "AVD" + strconv.Itoa(c) + "->"
+			cad += "AVD" + strconv.Itoa(c) + " ->"
 			cad += "AVD" + strconv.Itoa(int(avd.AVDAptrArraySubdirectorios[i])) + ";\n"
 		}
 	}
 	if avd.AVDAptrInd != 0 {
-		cad += "AVD" + strconv.Itoa(c) + "->"
+		cad += "AVD" + strconv.Itoa(c) + " ->"
 		cad += "AVD" + strconv.Itoa(int(avd.AVDAptrInd)) + ";\n"
 	}
 	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
@@ -4040,7 +4040,7 @@ func TablaDD(dd DetalleDirectorio, nodo string, cont int, path string, startSupe
 					}
 				}
 				cadena += "<td bgcolor=\"#82E0AA\">" + nom + "</td>\n"
-				cadena += "<td>" + strconv.Itoa(int(dd.DDArrayAptrINodo[i].DDAptrINodo)) + "</td>\n"
+				cadena += "<td port=\"" + strconv.Itoa(i) + "\">" + strconv.Itoa(int(dd.DDArrayAptrINodo[i].DDAptrINodo)) + "</td>\n"
 				cadena += "</tr>\n"
 			} else {
 				cadena += "<tr>"
@@ -4051,7 +4051,7 @@ func TablaDD(dd DetalleDirectorio, nodo string, cont int, path string, startSupe
 		}
 		cadena += "<tr><td bgcolor=\"#82E0AA\">AptrInd</td>\n"
 		if dd.DDAptrIndirecto != 0 {
-			cadena += "<td>" + strconv.Itoa(int(dd.DDAptrIndirecto)) + "</td></tr>\n"
+			cadena += "<td port=\"5\">" + strconv.Itoa(int(dd.DDAptrIndirecto)) + "</td></tr>\n"
 		} else {
 			cadena += "<td> </td></tr>\n"
 		}
@@ -4087,7 +4087,7 @@ func TablaINodo(inodo INodo, nodo string, cont int, path string, startSuper int6
 			cadena += "<tr>"
 			cadena += "<td bgcolor=\"#5DADE2\">Aptr" + strconv.Itoa(i+1) + "</td>\n"
 			if inodo.INodoAptrDeBloque[i] != 0 {
-				cadena += "<td>" + strconv.Itoa(int(inodo.INodoAptrDeBloque[i])) + "</td>\n"
+				cadena += "<td port=\"" + strconv.Itoa(i) + "\">" + strconv.Itoa(int(inodo.INodoAptrDeBloque[i])) + "</td>\n"
 			} else {
 				cadena += "<td> </td>"
 			}
@@ -4096,7 +4096,7 @@ func TablaINodo(inodo INodo, nodo string, cont int, path string, startSuper int6
 		cadena += "<tr>\n"
 		cadena += "<td bgcolor=\"#5DADE2\">AptrInd</td>\n"
 		if inodo.INodoAptrInd != 0 {
-			cadena += "<td>" + strconv.Itoa(int(inodo.INodoAptrInd)) + "</td>\n"
+			cadena += "<td port=\"4\">" + strconv.Itoa(int(inodo.INodoAptrInd)) + "</td>\n"
 		} else {
 			cadena += "<td> </td>"
 		}
@@ -4145,16 +4145,16 @@ func AptrAVDS(path string, c int, avd ArbolVirtualDirectorio, startSuper int64) 
 	if b {
 		for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
 			if avd.AVDAptrArraySubdirectorios[i] != 0 {
-				cad += "AVD" + strconv.Itoa(c) + "->"
+				cad += "AVD" + strconv.Itoa(c) + ":" + strconv.Itoa(i) + "->"
 				cad += "AVD" + strconv.Itoa(int(avd.AVDAptrArraySubdirectorios[i])) + ";\n"
 			}
 		}
 		if avd.AVDAptrInd != 0 {
-			cad += "AVD" + strconv.Itoa(c) + "->"
+			cad += "AVD" + strconv.Itoa(c) + ":6 " + "->"
 			cad += "AVD" + strconv.Itoa(int(avd.AVDAptrInd)) + ";\n"
 		}
 		if avd.AVDAptrDetalleDirectorio != 0 {
-			cad += "AVD" + strconv.Itoa(c) + "->"
+			cad += "AVD" + strconv.Itoa(c) + ":7 ->"
 			cad += "DD" + strconv.Itoa(int(avd.AVDAptrDetalleDirectorio)) + ";\n"
 		}
 		for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
@@ -4190,12 +4190,12 @@ func AptrDD(path string, c int, dd DetalleDirectorio, startSuper int64) string {
 	if b {
 		for i := 0; i < len(dd.DDArrayAptrINodo); i++ {
 			if dd.DDArrayAptrINodo[i].DDAptrINodo != 0 {
-				cad += "DD" + strconv.Itoa(c) + "->"
+				cad += "DD" + strconv.Itoa(c) + ":" + strconv.Itoa(i) + " ->"
 				cad += "INODO" + strconv.Itoa(int(dd.DDArrayAptrINodo[i].DDAptrINodo)) + ";\n"
 			}
 		}
 		if dd.DDAptrIndirecto != 0 {
-			cad += "DD" + strconv.Itoa(c) + "->"
+			cad += "DD" + strconv.Itoa(c) + ":5 ->"
 			cad += "DD" + strconv.Itoa(int(dd.DDAptrIndirecto)) + ";\n"
 
 		}
@@ -4222,12 +4222,12 @@ func AptrINodo(path string, c int, inodo INodo, startSuper int64) string {
 	if b {
 		for i := 0; i < len(inodo.INodoAptrDeBloque); i++ {
 			if inodo.INodoAptrDeBloque[i] != 0 {
-				cad += "INODO" + strconv.Itoa(c) + "->"
+				cad += "INODO" + strconv.Itoa(c) + ":" + strconv.Itoa(i) + " ->"
 				cad += "BLOCK" + strconv.Itoa(int(inodo.INodoAptrDeBloque[i])) + ";\n"
 			}
 		}
 		if inodo.INodoAptrInd != 0 {
-			cad += "INODO" + strconv.Itoa(c) + "->"
+			cad += "INODO" + strconv.Itoa(c) + ":4" + " ->"
 			cad += "INODO" + strconv.Itoa(int(inodo.INodoAptrInd)) + ";\n"
 		}
 		if inodo.INodoAptrInd != 0 {
@@ -4291,12 +4291,15 @@ func TablaAVDSeleccionado(path string, startSuper int64, dir string) string {
 	if carpetas[0] == "" {
 		carpetas[0] = "/"
 	}
+	var nodos [100]string
 	cadena := ""
 	avd, d := LeerAVD(super.SbAptrStartAVD, dir, super.SbSizeStructAVD)
+	cont := int64(1)
 	if d && b {
-		cont := int64(1)
+
 		inicio := int64(0)
 		for i := 1; i <= len(carpetas); i++ {
+			nodos[i] = "AVD" + strconv.Itoa(int(cont))
 			cadena += "AVD" + strconv.Itoa(int(cont))
 			cadena += "[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
 			cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + "AVD" + strconv.Itoa(int(cont)) + " \"" + string(avd.AVDFechaCreacion[:]) + "\"" + "</i></td></tr>\n"
@@ -4335,6 +4338,13 @@ func TablaAVDSeleccionado(path string, startSuper int64, dir string) string {
 			}
 		}
 	}
+	for j := 1; j < len(nodos); j++ {
+		if nodos[j+1] != "" {
+			cadena += nodos[j] + "->" + nodos[j+1] + ";\n"
+		} else {
+			break
+		}
+	}
 	return cadena
 }
 
@@ -4370,4 +4380,35 @@ func RetornarCarpeta(padre string, avd ArbolVirtualDirectorio, path string, inic
 
 func buscarArchivo() {
 
+}
+
+func BuscarDD(dir string, start int64, ruta string) {
+	carpetas := strings.Split(ruta, "/")
+	if carpetas[0] == "" {
+		carpetas[0] = "/"
+	}
+	super, b := LeerSUPERBOOT(start, dir)
+	if b {
+		avd, d := LeerAVD(super.SbAptrStartAVD, dir, super.SbSizeStructAVD)
+		if d {
+			inicio := int64(0)
+			cont := int64(0)
+			for i := 1; i < len(carpetas); i++ {
+				inicio, cont = RetornarCarpeta(carpetas[i], avd, dir, super.SbAptrStartAVD, start)
+				fmt.Println(cont)
+				if inicio != -1 {
+					avd, d = LeerAVD(inicio, dir, super.SbSizeStructAVD)
+				} else {
+					fmt.Println(colorRed, "La carpeta "+carpetas[i]+" no fue encontrada!")
+
+				}
+			}
+			if avd.AVDAptrDetalleDirectorio != 0 {
+				//	ini := super.SbAptrStartDD + (super.SbSizeStructDD * (avd.AVDAptrDetalleDirectorio - 1))
+				//	dd := LeerDD(ini, dir, super.SbSizeStructDD)
+
+			}
+
+		}
+	}
 }
