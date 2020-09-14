@@ -51,9 +51,9 @@ func main() {
 	eleccion := strings.TrimRight(entrada, "\r\n")
 	f := "mount -path->/home/josselyn/Escritorio/archivoBinario/disco.dsk -name->particion8\n"
 	//	f += "mkfs -id->vda1 -type->full\n"
-	f += "rep -name->tree_directorio -path->\"/home/josselyn/carpeta de prueba2/directorios.png\" -id->vda1 -ruta->/home/user/docs/usacdasdasda"
+	f += "rep -name->tree_directorio -path->\"/home/josselyn/carpeta de prueba2/directorios.png\" -id->vda1 -ruta->/home/user/docs/usac"
 	//	f += "rep -name->tree_complete -path->\"/home/josselyn/carpetita de prueba/tree.png\" -id->vda1"
-	Analizador(f + "$$")
+	Analizador(eleccion + "$$")
 	for eleccion != "exit" {
 		fmt.Print(colorBlanco, "\nIntroduzca un comando----:: ")
 		reader = bufio.NewReader(os.Stdin)
@@ -4378,37 +4378,89 @@ func RetornarCarpeta(padre string, avd ArbolVirtualDirectorio, path string, inic
 	return -1, 0
 }
 
-func buscarArchivo() {
-
-}
-
-func BuscarDD(dir string, start int64, ruta string) {
-	carpetas := strings.Split(ruta, "/")
+//INTENTOFILE YA NO HACE NADA XD NO HAY TIEMPO XD
+func INTENTOFILE(path string, startSuper int64, dir string) string {
+	super, b := LeerSUPERBOOT(startSuper, dir)
+	carpetas := strings.Split(path, "/")
 	if carpetas[0] == "" {
 		carpetas[0] = "/"
 	}
-	super, b := LeerSUPERBOOT(start, dir)
-	if b {
-		avd, d := LeerAVD(super.SbAptrStartAVD, dir, super.SbSizeStructAVD)
-		if d {
-			inicio := int64(0)
-			cont := int64(0)
-			for i := 1; i < len(carpetas); i++ {
-				inicio, cont = RetornarCarpeta(carpetas[i], avd, dir, super.SbAptrStartAVD, start)
-				fmt.Println(cont)
-				if inicio != -1 {
-					avd, d = LeerAVD(inicio, dir, super.SbSizeStructAVD)
-				} else {
-					fmt.Println(colorRed, "La carpeta "+carpetas[i]+" no fue encontrada!")
+	var nodos [100]string
+	cadena := ""
+	avd, d := LeerAVD(super.SbAptrStartAVD, dir, super.SbSizeStructAVD)
+	cont := int64(1)
+	if d && b {
 
+		inicio := int64(0)
+		for i := 1; i < len(carpetas); i++ {
+			nodos[i] = "AVD" + strconv.Itoa(int(cont))
+			cadena += "AVD" + strconv.Itoa(int(cont))
+			cadena += "[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
+			cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + "AVD" + strconv.Itoa(int(cont)) + " \"" + string(avd.AVDFechaCreacion[:]) + "\"" + "</i></td></tr>\n"
+			cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + Nombres(avd.AVDNameDirectoy) + "</i></td></tr>\n"
+			cadena += "<tr><td bgcolor=\"#D7BDE2\">Aptr1</td><td bgcolor=\"#D7BDE2\">Aptr2</td><td bgcolor=\"#D7BDE2\">Aptr3</td><td bgcolor=\"#D7BDE2\">Aptr4</td><td bgcolor=\"#D7BDE2\">Aptr5</td><td bgcolor=\"#D7BDE2\">Aptr6</td><td bgcolor=\"#D7BDE2\">AptrDD</td><td bgcolor=\"#D7BDE2\">AptrInd</td></tr>\n"
+			cadena += "<tr>\n"
+			for j := 0; j < len(avd.AVDAptrArraySubdirectorios); j++ {
+				if avd.AVDAptrArraySubdirectorios[j] == 0 {
+					cadena += "<td> </td>"
+				} else {
+					cadena += "<td>" + strconv.Itoa(int(avd.AVDAptrArraySubdirectorios[j])) + "</td>\n"
 				}
 			}
 			if avd.AVDAptrDetalleDirectorio != 0 {
-				//	ini := super.SbAptrStartDD + (super.SbSizeStructDD * (avd.AVDAptrDetalleDirectorio - 1))
-				//	dd := LeerDD(ini, dir, super.SbSizeStructDD)
-
+				cadena += "<td>" + strconv.Itoa(int(avd.AVDAptrDetalleDirectorio)) + "</td>\n"
+			} else {
+				cadena += "<td> </td>\n"
 			}
-
+			if avd.AVDAptrInd != 0 {
+				cadena += "<td bgcolor=\"#D2B4DE\">" + strconv.Itoa(int(avd.AVDAptrInd)) + "</td>\n"
+			} else {
+				cadena += "<td bgcolor=\"#D2B4DE\"> </td>\n"
+			}
+			cadena += "</tr>\n"
+			cadena += "</table>>];\n"
+			nom := Nombres(avd.AVDNameDirectoy)
+			fmt.Println(nom)
+			//	if i != len(carpetas) {
+			inicio, cont = RetornarCarpeta(carpetas[i], avd, dir, super.SbAptrStartAVD, startSuper)
+			if inicio != -1 {
+				avd, d = LeerAVD(inicio, dir, super.SbSizeStructAVD)
+			} else {
+				fmt.Println(colorRed, "La carpeta "+carpetas[i]+" no fue encontrada!")
+				return ""
+			}
+			//}
 		}
 	}
+	for j := 1; j < len(nodos); j++ {
+		if nodos[j+1] != "" {
+			cadena += nodos[j] + "->" + nodos[j+1] + ";\n"
+		} else {
+			break
+		}
+	}
+	if avd.AVDAptrDetalleDirectorio != 0 {
+		punt := super.SbAptrStartDD + (super.SbSizeStructDD * (avd.AVDAptrDetalleDirectorio - 1))
+		dd := LeerDD(punt, dir, super.SbSizeStructDD)
+		cadena += TablaDD(dd, "DD", int(punt), dir, startSuper)
+		for i := 0; i < len(dd.DDArrayAptrINodo); i++ {
+
+			if dd.DDArrayAptrINodo[i].DDAptrINodo != 0 {
+				nom := ""
+				for j := 0; j < len(dd.DDArrayAptrINodo[i].DDfileName); j++ {
+					if dd.DDArrayAptrINodo[i].DDfileName[j] != 0 {
+						nom += string(rune(dd.DDArrayAptrINodo[i].DDfileName[j]))
+					} else {
+						break
+					}
+				}
+				if nom == carpetas[len(carpetas)-1] {
+					inodoC := super.SbAptrStartINodo + (super.SbSizeStructINodo * (dd.DDArrayAptrINodo[i].DDAptrINodo - 1))
+					inodo := LeerINodo(inodoC, dir, super.SbSizeStructINodo)
+					TablaINodo(inodo, "INODO", int(dd.DDArrayAptrINodo[i].DDAptrINodo), dir, startSuper)
+				}
+			}
+		}
+	}
+	return cadena
 }
