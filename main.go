@@ -49,8 +49,10 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
 	eleccion := strings.TrimRight(entrada, "\r\n")
-	f := "mount -path->/home/Prueba/Disco1.dsk -name->Particion1\n"
-	f += "rep -id->vda1 -Path->/home/Prueba/reporteMBR3.png -name->mbr"
+	f := "mount -path->/home/josselyn/Escritorio/archivoBinario/disco.dsk -name->particion8\n"
+	//	f += "mkfs -id->vda1 -type->full\n"
+	f += "mkfile -id->vda1 -path->/home/bin/hola/mia/prueba/OTRAPRUEBA33.PDF -size->80"
+	//	f += "rep -name->tree_complete -path->\"/home/josselyn/carpetita de prueba/tree.png\" -id->vda1"
 	Analizador(eleccion + "$$")
 	for eleccion != "exit" {
 		fmt.Print(colorBlanco, "\nIntroduzca un comando----:: ")
@@ -3037,32 +3039,35 @@ func SeleccionarReporte(name string, start int64, dirDisco string, ubicacionRepo
 		dd := false
 		super, dd = LeerSUPERBOOT(start, dirDisco)
 		if dd {
-			GraficarBitMap(ubicacionReporte, super.SbAptrStartBipmapAVD, super.SbSizeStructAVD, dirDisco)
+			GraficarBitMap(ubicacionReporte, super.SbAptrStartBipmapAVD, super.SbAVDcount, dirDisco)
 		}
 		break
 	case "bm_detdir":
 		dd := false
 		super, dd = LeerSUPERBOOT(start, dirDisco)
 		if dd {
-			GraficarBitMap(ubicacionReporte, super.SbAptrStartBipmapDD, super.SbSizeStructDD, dirDisco)
+			GraficarBitMap(ubicacionReporte, super.SbAptrStartBipmapDD, super.SbDetalleDirectorioCount, dirDisco)
 		}
 		break
 	case "bm_inode":
 		dd := false
 		super, dd = LeerSUPERBOOT(start, dirDisco)
 		if dd {
-			GraficarBitMap(ubicacionReporte, super.SbAptrStartBipmapINodo, super.SbSizeStructINodo, dirDisco)
+			GraficarBitMap(ubicacionReporte, super.SbAptrStartBipmapINodo, super.SbINodoCount, dirDisco)
 		}
 		break
 	case "bm_block":
 		dd := false
 		super, dd = LeerSUPERBOOT(start, dirDisco)
 		if dd {
-			GraficarBitMap(ubicacionReporte, super.SbAptrStartBipmapBloque, super.SbSizeStructBloque, dirDisco)
+			GraficarBitMap(ubicacionReporte, super.SbAptrStartBipmapBloque, super.SbBloquesCount, dirDisco)
 		}
 		break
 	case "directorio":
 		GraficarDirectorio(ubicacionReporte, start, dirDisco)
+		break
+	case "tree_complete":
+		GraficarCompleto(dirDisco, start, ubicacionReporte)
 		break
 	}
 }
@@ -3129,6 +3134,7 @@ func AgregarUserTXT(start int64, path string) {
 			file.Seek(super.SbAptrStartBipmapBloque, 0)
 			var b5 bytes.Buffer
 			binary.Write(&b5, binary.BigEndian, &ocupado)
+			binary.Write(&b5, binary.BigEndian, &ocupado)
 			escribirBytes(file, b5.Bytes())
 			bloque1 := Bloque{}
 			bloque2 := Bloque{}
@@ -3182,7 +3188,7 @@ func MkFile(arreglo []string) {
 			}
 			break
 		case "-path":
-			path = direccion(comandos[1])
+			path = direccion(arreglo[i])
 			if path != "" {
 
 			} else {
@@ -3193,7 +3199,7 @@ func MkFile(arreglo []string) {
 			crear = true
 			break
 		case "-size":
-			n, err := strconv.Atoi(comandos[i])
+			n, err := strconv.Atoi(comandos[1])
 			if err != nil {
 				fmt.Println(colorRed, "Verifique el valor del size.")
 				return
@@ -3201,7 +3207,11 @@ func MkFile(arreglo []string) {
 			size = n
 			break
 		case "-cont":
-			cadena = strings.ReplaceAll(comandos[i], "\"", "")
+			if strings.Contains(comandos[1], "@") {
+				cadena = strings.ReplaceAll(comandos[1], "@", " ")
+			} else {
+				cadena = comandos[i]
+			}
 
 			break
 		case "":
@@ -3224,10 +3234,19 @@ func CrearArchivos(id string, path string, cont string, size int64, crear bool, 
 	if b {
 		direccion := strings.Split(path, "/")
 		archivo := direccion[len(direccion)-1]
-		var carpetas []string
+		carp := ""
 		for i := 0; i < (len(direccion) - 1); i++ {
-			carpetas[i] = direccion[i]
+			if direccion[i] != "" {
+				carp += direccion[i] + "/"
+			} else {
+				carp += "/"
+			}
 		}
+		d := ""
+		for j := 0; j < len(carp)-1; j++ {
+			d += string(rune(carp[j]))
+		}
+		carpetas := strings.Split(d, "/")
 		if direccion[0] == "" {
 			direccion[0] = "/"
 		} else {
@@ -3238,12 +3257,16 @@ func CrearArchivos(id string, path string, cont string, size int64, crear bool, 
 		if b {
 			var inicio int64
 			if crear {
-				inicio = CrearCarpeta(direccion[0], carpetas, avd, dir, 1, crear, start, super.SbSizeStructAVD)
+				inicio = CrearCarpeta(direccion[0], carpetas, avd, dir, 1, crear, start, super.SbAptrStartAVD)
+
 			} else {
-				inicio = buscarCarpeta(carpetas, direccion[0], avd, dir, 1, start, super.SbSizeStructAVD)
+				inicio = buscarCarpeta(carpetas, direccion[0], avd, dir, 1, start, super.SbAptrStartAVD)
 			}
 			if inicio != -1 {
-				EntrarAVD(inicio, dir, archivo, cont, size)
+				super, b = LeerSUPERBOOT(start, dir)
+				if b {
+					EntrarAVD(inicio, dir, archivo, cont, size, start, dir)
+				}
 			} else {
 				fmt.Println(colorYellow, "No se ha encontrado el directorio solicitado")
 				return
@@ -3253,11 +3276,11 @@ func CrearArchivos(id string, path string, cont string, size int64, crear bool, 
 }
 
 //EntrarAVD verifica si el AVD ya tiene un arbol de directorio
-func EntrarAVD(AVDStart int64, path string, archivo string, cont string, size int64) {
+func EntrarAVD(AVDStart int64, path string, archivo string, cont string, size int64, start int64, dir string) {
 	avd, p := LeerAVD(AVDStart, path, super.SbSizeStructAVD)
 	if p {
 		if avd.AVDAptrDetalleDirectorio != 0 {
-			CrearDD(path, archivo, cont, size, avd.AVDAptrDetalleDirectorio)
+			CrearDD(path, archivo, cont, size, avd.AVDAptrDetalleDirectorio, start, dir)
 		} else {
 			//Se crea un nuevo apuntador en la siguiente posición libre de DD
 			op := ((super.SbAptrStartBipmapDD + super.SbDetalleDirectorioCount) - super.SbFirstBitFreeDD)
@@ -3265,54 +3288,56 @@ func EntrarAVD(AVDStart int64, path string, archivo string, cont string, size in
 			avd.AVDAptrDetalleDirectorio = apuntador
 			//Se modifica la información del AVD asignandole un valor a la celda de DD
 			EscribirAVD(AVDStart, path, avd)
-			CrearDDInodo(path, archivo, cont, size, 0, apuntador)
+			CrearDDInodo(path, archivo, cont, size, 0, apuntador, start, dir, DetalleDirectorio{})
 			return
 		}
 	}
 }
 
 //CrearDD hace los Detalle de directorio
-func CrearDD(path string, archivo string, cont string, size int64, aptr int64) {
+func CrearDD(path string, archivo string, cont string, size int64, aptr int64, start int64, dir string) {
 	inicioDD := super.SbAptrStartDD + (super.SbSizeStructDD * (aptr - 1))
 	dd := LeerDD(inicioDD, path, super.SbSizeStructDD)
 	for i := 0; i < len(dd.DDArrayAptrINodo); i++ {
-		var vacio [20]byte
-		if dd.DDArrayAptrINodo[i].DDfileName == vacio {
-			CrearDDInodo(path, archivo, cont, size, i, aptr)
+		if dd.DDArrayAptrINodo[i].DDAptrINodo == 0 {
+			CrearDDInodo(path, archivo, cont, size, i, aptr, start, dir, dd)
 			return
 		}
 	}
 	if dd.DDAptrIndirecto != 0 {
-		CrearDD(path, archivo, cont, size, dd.DDAptrIndirecto)
+		CrearDD(path, archivo, cont, size, dd.DDAptrIndirecto, start, dir)
 	} else {
+
 		op := ((super.SbAptrStartBipmapDD + super.SbDetalleDirectorioCount) - super.SbFirstBitFreeDD)
 		apuntador := (super.SbDetalleDirectorioCount - op) + 1
 		dd.DDAptrIndirecto = apuntador
-		CrearDDInodo(path, archivo, cont, size, 0, apuntador)
+		EscribirDD(inicioDD, path, dd)
+		CrearDDInodo(path, archivo, cont, size, 0, apuntador, start, dir, DetalleDirectorio{})
 	}
 
 }
 
 //CrearDDInodo crea los archivos
-func CrearDDInodo(path string, archivo string, cont string, size int64, posicion int, apuntador int64) {
+func CrearDDInodo(path string, archivo string, cont string, size int64, posicion int, apuntador int64, start int64, dir string, dd DetalleDirectorio) {
 
 	//Se calcula el start de la estructura del detalle de directorio
 	inicioDD := super.SbAptrStartDD + (super.SbSizeStructDD * (apuntador - 1))
 	//Se crea el nuevoDD que se va a meter en el archivo con todos sus datos
-	NuevoDD := DetalleDirectorio{}
+	//	NuevoDD := DetalleDirectorio{}
 	t := time.Now()
 	fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", t.Year(), t.Month(), t.Day(),
 		t.Hour(), t.Minute(), t.Second())
-	copy(NuevoDD.DDArrayAptrINodo[posicion].DDFileDateCreation[:], fecha)
-	copy(NuevoDD.DDArrayAptrINodo[posicion].DDFileDateModificacion[:], fecha)
-	copy(NuevoDD.DDArrayAptrINodo[posicion].DDfileName[:], archivo)
+	copy(dd.DDArrayAptrINodo[posicion].DDFileDateCreation[:], fecha)
+	copy(dd.DDArrayAptrINodo[posicion].DDFileDateModificacion[:], fecha)
+	copy(dd.DDArrayAptrINodo[posicion].DDfileName[:], archivo)
 	//Se crea el apuntador nuevo del INODO
 	apuntadorInodo := (super.SbAptrStartBipmapINodo + super.SbINodoCount) - super.SbFirstBitFreeINodo
 	aInodo := super.SbINodoCount - apuntadorInodo + 1
+
 	//Se le asigna el apuntador
-	NuevoDD.DDArrayAptrINodo[posicion].DDAptrINodo = aInodo
+	dd.DDArrayAptrINodo[posicion].DDAptrINodo = aInodo
 	//Se guarda el detalle de directorio en el archivo
-	EscribirDD(inicioDD, path, NuevoDD)
+	EscribirDD(inicioDD, path, dd)
 	//Se actualiza el bipmap del DD
 	super.SbFirstBitFreeDD = actualizarBipmap(path, super.SbFirstBitFreeDD, (super.SbAptrStartBipmapDD + super.SbSizeStructDD))
 	//Se actualiza el bipmap del inodo
@@ -3327,23 +3352,30 @@ func CrearDDInodo(path string, archivo string, cont string, size int64, posicion
 	if int64(tamCad) > size {
 		size = int64(tamCad)
 	}
-	redondear := float64(size / 25)
+	var redondear float64 = float64(size) / 25
 	a := int64(Roundf(redondear))
 	NuevoInodo.INodoBloquesAsignados = a
 	NuevoInodo.INodoFileSize = size
-	auxi := a
-	for i := 0; i < 4; i++ {
+	for i := 0; i < int(a); i++ {
 		var cad [25]byte
-		cad, cont = dividirCadena(cont)
-		NuevoInodo = CrearBloque(path, NuevoInodo, i, cad)
-		a--
+		if cont != "" {
+			cad, cont = dividirCadena(cont, size)
+			NuevoInodo = CrearBloque(path, NuevoInodo, i, cad)
+		} else {
+			cad = RetornarArreglo()
+			NuevoInodo = CrearBloque(path, NuevoInodo, i, cad)
+		}
 	}
-	if a != 0 {
+	if a > 4 {
 		apuntadorInodoind := (super.SbAptrStartBipmapINodo + super.SbINodoCount) - super.SbFirstBitFreeINodo
 		aInodoind := super.SbINodoCount - apuntadorInodoind + 1
 		NuevoInodo.INodoAptrInd = aInodoind
 		EscribirINodo(comienzoInodo, path, NuevoInodo)
-		CrearINodo(path, cont, size, NuevoInodo.INodoNumero, aInodoind, auxi)
+		CrearINodo(path, cont, size, NuevoInodo.INodoNumero, aInodoind, a-4)
+		EscribirSUPERBOOT(start, dir, super)
+	} else {
+		EscribirINodo(comienzoInodo, path, NuevoInodo)
+		EscribirSUPERBOOT(start, dir, super)
 	}
 }
 
@@ -3354,39 +3386,56 @@ func CrearINodo(path string, cont string, size int64, numero int64, aptrind int6
 	NuevoInodo.INodoNumero = numero
 	NuevoInodo.INodoBloquesAsignados = a
 	NuevoInodo.INodoFileSize = size
-	auxi := a
-	for i := 0; i < 4; i++ {
+	for i := 0; i < int(a); i++ {
 		var cad [25]byte
-		cad, cont = dividirCadena(cont)
-		NuevoInodo = CrearBloque(path, NuevoInodo, i, cad)
-		a--
+		if cont != "" {
+			cad, cont = dividirCadena(cont, size)
+			NuevoInodo = CrearBloque(path, NuevoInodo, i, cad)
+		} else {
+			cad = RetornarArreglo()
+			NuevoInodo = CrearBloque(path, NuevoInodo, i, cad)
+		}
 	}
-	if a != 0 {
+	if a > 4 {
 		apuntadorInodoind := (super.SbAptrStartBipmapINodo + super.SbINodoCount) - super.SbFirstBitFreeINodo
 		aInodoind := super.SbINodoCount - apuntadorInodoind + 1
 		NuevoInodo.INodoAptrInd = aInodoind
 		super.SbFirstBitFreeINodo = actualizarBipmap(path, super.SbFirstBitFreeINodo, (super.SbAptrStartBipmapINodo + super.SbSizeStructINodo))
 		EscribirINodo(comienzoInodo, path, NuevoInodo)
-		CrearINodo(path, cont, size, NuevoInodo.INodoNumero, aInodoind, auxi)
+		CrearINodo(path, cont, size, NuevoInodo.INodoNumero, aInodoind, a-4)
+	} else {
+		EscribirINodo(comienzoInodo, path, NuevoInodo)
 	}
 }
-func dividirCadena(cadena string) (cad [25]byte, resto string) {
+func dividirCadena(cadena string, size int64) (cad [25]byte, resto string) {
 	noSeUsa := ""
 	for i := 0; i < len(cadena); i++ {
 		noSeUsa += string(rune(cadena[i]))
-		cad[i] = cadena[i]
+		if i < 25 {
+			cad[i] = cadena[i]
+			size--
+		} else {
+			break
+		}
 	}
 	resto = strings.Replace(cadena, noSeUsa, "", 1)
+	var letra byte = 65
+	for i := 0; i < len(cad); i++ {
+		if cad[i] == 0 {
+			cad[i] = letra
+			letra++
+		}
+	}
 	return cad, resto
 }
 
 //RetornarArreglo divide el contenido
-func RetornarArreglo(size int64) [25]byte {
+func RetornarArreglo() [25]byte {
 	var aux [25]byte
 
 	var letra byte = 65
 	var i int64
-	for i = 0; i < size; i++ {
+	for i = 0; i < 25; i++ {
 		aux[i] = letra
 		letra++
 		if letra == 91 {
@@ -3413,7 +3462,7 @@ func CrearBloque(path string, NuevoInodo INodo, i int, arreglo [25]byte) INodo {
 //Roundf dd
 func Roundf(x float64) float64 {
 	t := math.Trunc(x)
-	if math.Abs(x-t) >= 0 {
+	if math.Abs(x-t) > 0 {
 		return t + math.Copysign(1, x)
 	}
 	return t
@@ -3461,13 +3510,17 @@ func buscarCarpeta(carpetas []string, padre string, avd ArbolVirtualDirectorio, 
 			avdAux, p := LeerAVD(super.SbAptrStartAVD+((avd.AVDAptrArraySubdirectorios[i]-1)*super.SbSizeStructAVD), path, super.SbSizeStructAVD)
 			if p {
 				if Nombres(avdAux.AVDNameDirectoy) == carpetas[siguiente] {
-					fmt.Println(avd)
 					padre = carpetas[siguiente]
-					if siguiente < len(carpetas)-1 {
+					if siguiente < len(carpetas) {
 						siguiente++
 						inicioAVD = super.SbAptrStartAVD + ((avd.AVDAptrArraySubdirectorios[i] - 1) * super.SbSizeStructAVD)
+						if padre == carpetas[len(carpetas)-1] {
+							return inicioAVD
+						}
 						return buscarCarpeta(carpetas, padre, avdAux, path, siguiente, ss, inicioAVD)
+
 					}
+
 					return inicioAVD
 
 				}
@@ -3563,6 +3616,9 @@ func CrearCarpeta(carpetaPadre string, conjCarpetas []string, avd ArbolVirtualDi
 					if siguiente < len(conjCarpetas)-1 {
 						siguiente++
 						inicioAVD = super.SbAptrStartAVD + ((avd.AVDAptrArraySubdirectorios[i] - 1) * super.SbSizeStructAVD)
+						if carpetaPadre == conjCarpetas[len(conjCarpetas)-1] {
+							return inicioAVD
+						}
 						return CrearCarpeta(carpetaPadre, conjCarpetas, avdAux, path, siguiente, crear, ss, inicioAVD)
 					}
 					return inicioAVD
@@ -3741,7 +3797,6 @@ func GraficarDIR(avd ArbolVirtualDirectorio, nodo string, cont int, path string)
 //UniverDir hace la union entre directorios
 func UniverDir(path string, c int, avd ArbolVirtualDirectorio) string {
 	cad := ""
-	//	avd, aux := LeerAVD(super.SbAptrStartAVD, path, super.SbSizeStructAVD)
 
 	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
 		if avd.AVDAptrArraySubdirectorios[i] != 0 {
@@ -3876,8 +3931,8 @@ func GraficarCompleto(dirDisco string, startSuper int64, ubicacion string) {
 			cadena += "\nnode [shape=plain]\n rankdir=LR\n"
 			avd, act := LeerAVD(super.SbAptrStartAVD, dirDisco, super.SbSizeStructAVD)
 			if act {
-				cadena += GraficarDIR(avd, "AVD", 1, dirDisco)
-				cadena += UniverDir(dirDisco, 1, avd)
+				cadena += GraficaComplete(avd, "AVD", 1, dirDisco, startSuper)
+				cadena += AptrAVDS(dirDisco, 1, avd, startSuper)
 
 				cadena += "}"
 				errrr := ioutil.WriteFile(dir, []byte(cadena[:]), 0644)
@@ -3894,4 +3949,406 @@ func GraficarCompleto(dirDisco string, startSuper int64, ubicacion string) {
 			}
 		}
 	}
+}
+
+//GraficaComplete hace la grafica completa del sistema de archivos
+func GraficaComplete(avd ArbolVirtualDirectorio, nodo string, cont int, path string, startSuper int64) string {
+	super, b := LeerSUPERBOOT(startSuper, path)
+	cadena := nodo + strconv.Itoa(cont)
+	if b {
+
+		cadena += "[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
+		cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + "AVD" + strconv.Itoa(cont) + " \"" + string(avd.AVDFechaCreacion[:]) + "\"" + "</i></td></tr>\n"
+		cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + Nombres(avd.AVDNameDirectoy) + "</i></td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#D7BDE2\">Aptr1</td><td bgcolor=\"#D7BDE2\">Aptr2</td><td bgcolor=\"#D7BDE2\">Aptr3</td><td bgcolor=\"#D7BDE2\">Aptr4</td><td bgcolor=\"#D7BDE2\">Aptr5</td><td bgcolor=\"#D7BDE2\">Aptr6</td><td bgcolor=\"#D7BDE2\">AptrDD</td><td bgcolor=\"#D7BDE2\">AptrInd</td></tr>\n"
+		cadena += "<tr>\n"
+		for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+			if avd.AVDAptrArraySubdirectorios[i] == 0 {
+				cadena += "<td> </td>"
+			} else {
+				cadena += "<td>" + strconv.Itoa(int(avd.AVDAptrArraySubdirectorios[i])) + "</td>\n"
+			}
+		}
+		if avd.AVDAptrDetalleDirectorio != 0 {
+			cadena += "<td>" + strconv.Itoa(int(avd.AVDAptrDetalleDirectorio)) + "</td>\n"
+		} else {
+			cadena += "<td> </td>\n"
+		}
+		if avd.AVDAptrInd != 0 {
+			cadena += "<td bgcolor=\"#D2B4DE\">" + strconv.Itoa(int(avd.AVDAptrInd)) + "</td>\n"
+		} else {
+			cadena += "<td bgcolor=\"#D2B4DE\"> </td>\n"
+		}
+		cadena += "</tr>\n"
+		cadena += "</table>>];\n"
+		for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+			if avd.AVDAptrArraySubdirectorios[i] != 0 {
+				pos := super.SbAptrStartAVD + (super.SbSizeStructAVD * (avd.AVDAptrArraySubdirectorios[i] - 1))
+				avdaux, ac := LeerAVD(pos, path, super.SbSizeStructAVD)
+				if ac {
+					cont = int(avd.AVDAptrArraySubdirectorios[i])
+					cadena += GraficaComplete(avdaux, nodo, cont, path, startSuper)
+
+				}
+			}
+		}
+		if avd.AVDAptrInd != 0 {
+			pos := super.SbAptrStartAVD + (super.SbSizeStructAVD * (avd.AVDAptrInd - 1))
+			avdaux, ac := LeerAVD(pos, path, super.SbSizeStructAVD)
+			if ac {
+				cont = int(avd.AVDAptrInd)
+				cadena += GraficaComplete(avdaux, nodo, cont, path, startSuper)
+			}
+		}
+		if avd.AVDAptrDetalleDirectorio != 0 {
+			apuntador := super.SbAptrStartDD + (super.SbSizeStructDD * (avd.AVDAptrDetalleDirectorio - 1))
+			dd := LeerDD(apuntador, path, super.SbSizeStructDD)
+			cont = int(avd.AVDAptrDetalleDirectorio)
+			cadena += TablaDD(dd, "DD", cont, path, startSuper)
+		}
+	}
+	return cadena
+}
+
+//TablaDD grafica las tablas con la información del dd
+func TablaDD(dd DetalleDirectorio, nodo string, cont int, path string, startSuper int64) string {
+	super, b := LeerSUPERBOOT(startSuper, path)
+	cadena := nodo + strconv.Itoa(cont)
+	if b {
+		//	cadena := nodo + strconv.Itoa(cont)
+		cadena += "[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
+		cadena += "<tr><td bgcolor=\"#82E0AA\"><i>" + "Detalle_Directorio</i></td><td bgcolor=\"#82E0AA\">" + strconv.Itoa(cont) + "</td></tr>\n"
+		for i := 0; i < len(dd.DDArrayAptrINodo); i++ {
+			if dd.DDArrayAptrINodo[i].DDAptrINodo != 0 {
+				cadena += "<tr>"
+				nom := ""
+				for j := 0; j < len(dd.DDArrayAptrINodo[i].DDfileName); j++ {
+					if dd.DDArrayAptrINodo[i].DDfileName[j] != 0 {
+						nom += string(rune(dd.DDArrayAptrINodo[i].DDfileName[j]))
+					}
+				}
+				cadena += "<td bgcolor=\"#82E0AA\">" + nom + "</td>\n"
+				cadena += "<td>" + strconv.Itoa(int(dd.DDArrayAptrINodo[i].DDAptrINodo)) + "</td>\n"
+				cadena += "</tr>\n"
+			} else {
+				cadena += "<tr>"
+				cadena += "<td bgcolor=\"#82E0AA\">" + "</td>\n"
+				cadena += "<td>" + "</td>\n"
+				cadena += "</tr>\n"
+			}
+		}
+		cadena += "<tr><td bgcolor=\"#82E0AA\">AptrInd</td>\n"
+		if dd.DDAptrIndirecto != 0 {
+			cadena += "<td>" + strconv.Itoa(int(dd.DDAptrIndirecto)) + "</td></tr>\n"
+		} else {
+			cadena += "<td> </td></tr>\n"
+		}
+		cadena += "</table>>];\n"
+		if dd.DDAptrIndirecto != 0 {
+			apuntador := super.SbAptrStartDD + (super.SbSizeStructDD * (dd.DDAptrIndirecto - 1))
+			siguiente := LeerDD(apuntador, path, super.SbSizeStructDD)
+			cont = int(dd.DDAptrIndirecto)
+			cadena += TablaDD(siguiente, nodo, cont, path, startSuper)
+		}
+		for i := 0; i < len(dd.DDArrayAptrINodo); i++ {
+			if dd.DDArrayAptrINodo[i].DDAptrINodo != 0 {
+				apuntador := super.SbAptrStartINodo + (super.SbSizeStructINodo * (dd.DDArrayAptrINodo[i].DDAptrINodo - 1))
+				siguiente := LeerINodo(apuntador, path, super.SbSizeStructINodo)
+				cont = int(dd.DDArrayAptrINodo[i].DDAptrINodo)
+				cadena += TablaINodo(siguiente, "INODO", cont, path, startSuper)
+			}
+		}
+	}
+	return cadena
+}
+
+//TablaINodo se grafican las tablas de los inodos
+func TablaINodo(inodo INodo, nodo string, cont int, path string, startSuper int64) string {
+	super, b := LeerSUPERBOOT(startSuper, path)
+	cadena := nodo + strconv.Itoa(cont)
+	if b {
+		cadena += "[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
+		cadena += "<tr><td colspan=\"2\" bgcolor=\"#5DADE2\"><i>" + "Inodo " + strconv.Itoa(cont) + "</i></td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#5DADE2\">Tamaño</td>" + "<td>" + strconv.Itoa(int(inodo.INodoFileSize)) + "</td></tr>\n"
+		cadena += "<tr><td bgcolor=\"#5DADE2\">No.Bloques</td><td>" + strconv.Itoa(int(inodo.INodoBloquesAsignados)) + "</td></tr>\n"
+		for i := 0; i < len(inodo.INodoAptrDeBloque); i++ {
+			cadena += "<tr>"
+			cadena += "<td bgcolor=\"#5DADE2\">Aptr" + strconv.Itoa(i+1) + "</td>\n"
+			if inodo.INodoAptrDeBloque[i] != 0 {
+				cadena += "<td>" + strconv.Itoa(int(inodo.INodoAptrDeBloque[i])) + "</td>\n"
+			} else {
+				cadena += "<td> </td>"
+			}
+			cadena += "</tr>\n"
+		}
+		cadena += "<tr>\n"
+		cadena += "<td bgcolor=\"#5DADE2\">AptrInd</td>\n"
+		if inodo.INodoAptrInd != 0 {
+			cadena += "<td>" + strconv.Itoa(int(inodo.INodoAptrInd)) + "</td>\n"
+		} else {
+			cadena += "<td> </td>"
+		}
+		cadena += "</tr>\n"
+		cadena += "</table>>];\n"
+		if inodo.INodoAptrInd != 0 {
+			apuntador := super.SbAptrStartINodo + (super.SbSizeStructINodo * (inodo.INodoAptrInd - 1))
+			siguiente := LeerINodo(apuntador, path, super.SbSizeStructINodo)
+			cont = int(inodo.INodoAptrInd)
+			cadena += TablaINodo(siguiente, nodo, cont, path, startSuper)
+		}
+		for i := 0; i < len(inodo.INodoAptrDeBloque); i++ {
+			if inodo.INodoAptrDeBloque[i] != 0 {
+				apuntador := super.SbAptrStartBloque + (super.SbSizeStructBloque * (inodo.INodoAptrDeBloque[i] - 1))
+				siguiente := LeerBloque(apuntador, path, super.SbSizeStructBloque)
+				cont = int(inodo.INodoAptrDeBloque[i])
+				cadena += TablaBloque(siguiente, "BLOCK", cont, path)
+			}
+		}
+	}
+	return cadena
+}
+
+//TablaBloque grafica los bloques que tienen los inodos
+func TablaBloque(bloque Bloque, nodo string, cont int, path string) string {
+	cadena := nodo + strconv.Itoa(cont)
+
+	cadena += "[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
+	cadena += "<tr><td bgcolor=\"#F8C471\"><i>Bloque</i></td><td>" + strconv.Itoa(cont) + "</td></tr>\n"
+	contenido := ""
+	for i := 0; i < len(bloque.BDarray); i++ {
+		if bloque.BDarray[i] != 0 {
+			contenido += string(rune(bloque.BDarray[i]))
+		}
+	}
+	cadena += "<tr><td colspan=\"2\">" + contenido + "</td></tr>\n"
+	cadena += "</table>>];\n"
+
+	return cadena
+}
+
+//AptrAVDS grafica las flechas del avd y dd
+func AptrAVDS(path string, c int, avd ArbolVirtualDirectorio, startSuper int64) string {
+	cad := ""
+	super, b := LeerSUPERBOOT(startSuper, path)
+	if b {
+		for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+			if avd.AVDAptrArraySubdirectorios[i] != 0 {
+				cad += "AVD" + strconv.Itoa(c) + "->"
+				cad += "AVD" + strconv.Itoa(int(avd.AVDAptrArraySubdirectorios[i])) + ";\n"
+			}
+		}
+		if avd.AVDAptrInd != 0 {
+			cad += "AVD" + strconv.Itoa(c) + "->"
+			cad += "AVD" + strconv.Itoa(int(avd.AVDAptrInd)) + ";\n"
+		}
+		if avd.AVDAptrDetalleDirectorio != 0 {
+			cad += "AVD" + strconv.Itoa(c) + "->"
+			cad += "DD" + strconv.Itoa(int(avd.AVDAptrDetalleDirectorio)) + ";\n"
+		}
+		for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+			if avd.AVDAptrArraySubdirectorios[i] != 0 {
+				pos := super.SbAptrStartAVD + (super.SbSizeStructAVD * (avd.AVDAptrArraySubdirectorios[i] - 1))
+				avdaux, ac := LeerAVD(pos, path, super.SbSizeStructAVD)
+				if ac {
+					cad += AptrAVDS(path, int(avd.AVDAptrArraySubdirectorios[i]), avdaux, startSuper)
+				}
+			}
+
+		}
+		if avd.AVDAptrInd != 0 {
+			pos := super.SbAptrStartAVD + (super.SbSizeStructAVD * (avd.AVDAptrInd - 1))
+			avdaux, ac := LeerAVD(pos, path, super.SbSizeStructAVD)
+			if ac {
+				cad += AptrAVDS(path, int(avd.AVDAptrInd), avdaux, startSuper)
+			}
+		}
+		if avd.AVDAptrDetalleDirectorio != 0 {
+			pos := super.SbAptrStartDD + (super.SbSizeStructDD * (avd.AVDAptrDetalleDirectorio - 1))
+			dd := LeerDD(pos, path, super.SbSizeStructDD)
+			cad += AptrDD(path, int(avd.AVDAptrDetalleDirectorio), dd, startSuper)
+		}
+	}
+	return cad
+}
+
+//AptrDD dibuja las flechas de los DD
+func AptrDD(path string, c int, dd DetalleDirectorio, startSuper int64) string {
+	cad := ""
+	super, b := LeerSUPERBOOT(startSuper, path)
+	if b {
+		for i := 0; i < len(dd.DDArrayAptrINodo); i++ {
+			if dd.DDArrayAptrINodo[i].DDAptrINodo != 0 {
+				cad += "DD" + strconv.Itoa(c) + "->"
+				cad += "INODO" + strconv.Itoa(int(dd.DDArrayAptrINodo[i].DDAptrINodo)) + ";\n"
+			}
+		}
+		if dd.DDAptrIndirecto != 0 {
+			cad += "DD" + strconv.Itoa(c) + "->"
+			cad += "DD" + strconv.Itoa(int(dd.DDAptrIndirecto)) + ";\n"
+
+		}
+		if dd.DDAptrIndirecto != 0 {
+			pos := super.SbAptrStartDD + (super.SbSizeStructDD * (dd.DDAptrIndirecto - 1))
+			siguiente := LeerDD(pos, path, super.SbSizeStructDD)
+			cad += AptrDD(path, int(dd.DDAptrIndirecto), siguiente, startSuper)
+		}
+		for i := 0; i < len(dd.DDArrayAptrINodo); i++ {
+			if dd.DDArrayAptrINodo[i].DDAptrINodo != 0 {
+				pos := super.SbAptrStartINodo + (super.SbSizeStructINodo * (dd.DDArrayAptrINodo[i].DDAptrINodo - 1))
+				siguiente := LeerINodo(pos, path, super.SbSizeStructINodo)
+				cad += AptrINodo(path, int(dd.DDArrayAptrINodo[i].DDAptrINodo), siguiente, startSuper)
+			}
+		}
+	}
+	return cad
+}
+
+//AptrINodo grafica las flechas de los inodos
+func AptrINodo(path string, c int, inodo INodo, startSuper int64) string {
+	cad := ""
+	super, b := LeerSUPERBOOT(startSuper, path)
+	if b {
+		for i := 0; i < len(inodo.INodoAptrDeBloque); i++ {
+			if inodo.INodoAptrDeBloque[i] != 0 {
+				cad += "INODO" + strconv.Itoa(c) + "->"
+				cad += "BLOCK" + strconv.Itoa(int(inodo.INodoAptrDeBloque[i])) + ";\n"
+			}
+		}
+		if inodo.INodoAptrInd != 0 {
+			cad += "INODO" + strconv.Itoa(c) + "->"
+			cad += "INODO" + strconv.Itoa(int(inodo.INodoAptrInd)) + ";\n"
+		}
+		if inodo.INodoAptrInd != 0 {
+			pos := super.SbAptrStartINodo + (super.SbSizeStructINodo * (inodo.INodoAptrInd - 1))
+			siguiente := LeerINodo(pos, path, super.SbSizeStructINodo)
+			cad += AptrINodo(path, int(inodo.INodoAptrInd), siguiente, startSuper)
+		}
+	}
+	return cad
+}
+
+//GraficarTreeDir grafica un recorrido de directorio
+func GraficarTreeDir(ubicacion string, path string, startSuper int64, dirDisco string) {
+
+	dir := ""
+	rutas := strings.Split(ubicacion, "/")
+	for i := 0; i < len(rutas)-1; i++ {
+		dir += rutas[i] + "/"
+	}
+	nombre := rutas[len(rutas)-1]
+	extension := strings.Split(nombre, ".")
+
+	if AnalizarRuta(dir) {
+
+		dir = dir + extension[0] + ".txt"
+		var _, errr = os.Stat(dir)
+		//Crea el archivo si no existe
+		if os.IsNotExist(errr) {
+			var file, errr = os.Create(dir)
+			if existeError(errr) {
+				return
+			}
+			defer file.Close()
+		}
+
+		cadena := ""
+		cadena += "digraph G {\ngraph [pad=\"0.5\", nodesep=\"1\", ranksep=\"2\"];"
+		cadena += "\nnode [shape=plain]\n rankdir=LR\n"
+
+		cadena += TablaAVDSeleccionado(path, startSuper, dirDisco)
+		cadena += "}"
+		errrr := ioutil.WriteFile(dir, []byte(cadena[:]), 0644)
+		if errrr != nil {
+			panic(errrr)
+		}
+		com1 := "dot"
+		com2 := "-T" + strings.ToLower(extension[1])
+		com3 := dir
+		com4 := "-o"
+		com5 := ubicacion
+		exec.Command(com1, com2, com3, com4, com5).Output()
+		fmt.Println(colorGreen, "Success")
+
+	}
+}
+
+//TablaAVDSeleccionado grafica las carpetas seleccionadas
+func TablaAVDSeleccionado(path string, startSuper int64, dir string) string {
+	super, b := LeerSUPERBOOT(startSuper, dir)
+	carpetas := strings.Split(path, "/")
+	if carpetas[0] == "" {
+		carpetas[0] = "/"
+	}
+	cadena := ""
+	avd, d := LeerAVD(super.SbAptrStartAVD, dir, super.SbSizeStructAVD)
+	if d && b {
+		cont := 1
+
+		for i := 0; i < len(carpetas); i++ {
+
+			cadena += "AVD" + strconv.Itoa(cont)
+			cadena += "[label=<\n<table border=\"0\" cellborder=\"1\" cellspacing=\"0\">\n"
+			cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + "AVD" + strconv.Itoa(cont) + " \"" + string(avd.AVDFechaCreacion[:]) + "\"" + "</i></td></tr>\n"
+			cadena += "<tr><td colspan=\"8\" bgcolor=\"#AF7AC5\"><i>" + Nombres(avd.AVDNameDirectoy) + "</i></td></tr>\n"
+			cadena += "<tr><td bgcolor=\"#D7BDE2\">Aptr1</td><td bgcolor=\"#D7BDE2\">Aptr2</td><td bgcolor=\"#D7BDE2\">Aptr3</td><td bgcolor=\"#D7BDE2\">Aptr4</td><td bgcolor=\"#D7BDE2\">Aptr5</td><td bgcolor=\"#D7BDE2\">Aptr6</td><td bgcolor=\"#D7BDE2\">AptrDD</td><td bgcolor=\"#D7BDE2\">AptrInd</td></tr>\n"
+			cadena += "<tr>\n"
+			for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+				if avd.AVDAptrArraySubdirectorios[i] == 0 {
+					cadena += "<td> </td>"
+				} else {
+					cadena += "<td>" + strconv.Itoa(int(avd.AVDAptrArraySubdirectorios[i])) + "</td>\n"
+				}
+			}
+			if avd.AVDAptrDetalleDirectorio != 0 {
+				cadena += "<td>" + strconv.Itoa(int(avd.AVDAptrDetalleDirectorio)) + "</td>\n"
+			} else {
+				cadena += "<td> </td>\n"
+			}
+			if avd.AVDAptrInd != 0 {
+				cadena += "<td bgcolor=\"#D2B4DE\">" + strconv.Itoa(int(avd.AVDAptrInd)) + "</td>\n"
+			} else {
+				cadena += "<td bgcolor=\"#D2B4DE\"> </td>\n"
+			}
+			cadena += "</tr>\n"
+			cadena += "</table>>];\n"
+			inicio := RetornarCarpeta(carpetas[i], avd, dir, super.SbAptrStartAVD)
+			if inicio != -1 {
+				avd, d = LeerAVD(super.SbAptrStartAVD, dir, super.SbSizeStructAVD)
+			} else {
+				fmt.Println(colorRed, "La carpeta "+carpetas[i]+" no fue encontrada!")
+				return ""
+			}
+		}
+	}
+	return cadena
+}
+
+//RetornarCarpeta retorna el inicio del AVD
+func RetornarCarpeta(padre string, avd ArbolVirtualDirectorio, path string, inicioAVD int64) int64 {
+
+	for i := 0; i < len(avd.AVDAptrArraySubdirectorios); i++ {
+		if avd.AVDAptrArraySubdirectorios[i] != 0 {
+			avdAux, p := LeerAVD(super.SbAptrStartAVD+((avd.AVDAptrArraySubdirectorios[i]-1)*super.SbSizeStructAVD), path, super.SbSizeStructAVD)
+			if p {
+				if Nombres(avdAux.AVDNameDirectoy) == padre {
+					return inicioAVD
+				}
+				inicioAVD = super.SbAptrStartAVD + ((avd.AVDAptrArraySubdirectorios[i] - 1) * super.SbSizeStructAVD)
+
+			}
+		}
+
+	}
+	if avd.AVDAptrInd != 0 {
+		inicioAVD = super.SbAptrStartAVD + ((avd.AVDAptrInd - 1) * super.SbSizeStructAVD)
+		avdAux, p := LeerAVD(inicioAVD, path, super.SbSizeStructAVD)
+		if p {
+			RetornarCarpeta(padre, avdAux, path, inicioAVD)
+		}
+	}
+	return -1
+}
+
+func buscarArchivo() {
+
 }
