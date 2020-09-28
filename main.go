@@ -49,9 +49,9 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	entrada, _ := reader.ReadString('\n')
 	eleccion := strings.TrimRight(entrada, "\r\n")
-	f := "mount -path->/home/josselyn/Escritorio/archivoBinario/disco.dsk -name->particion8\n"
+	f := "mount -path->/home/archivos/fase2/Disco1.dsk -name->Particion1\n"
 	//	f += "mkfs -id->vda1 -type->full\n"
-	f += "rep -name->tree_directorio -path->\"/home/josselyn/carpeta de prueba2/directorios.png\" -id->vda1 -ruta->/home/user/docs/usac"
+	f += "mkfile -id->vda1 -path->/home/etc/que/onda/uno/dos2.txt -size->1000"
 	//	f += "rep -name->tree_complete -path->\"/home/josselyn/carpetita de prueba/tree.png\" -id->vda1"
 	Analizador(eleccion + "$$")
 	for eleccion != "exit" {
@@ -323,7 +323,7 @@ func CargaMasiva(direccion string) {
 func direccion(cadena string) string {
 	cad := strings.Split(cadena, "->")
 	direccion := ""
-	if cad[0] == "-path" {
+	if strings.ToLower(cad[0]) == "-path" {
 		if strings.Contains(cad[1], "@") {
 			for h := 0; h < len(cad[1]); h++ {
 				if cad[1][h] == 64 {
@@ -892,6 +892,7 @@ func AgregarOQuitar(path string, add int64, name string, unidades int64) {
 	b := false
 	add = add * unidades
 	mbr, b = LeerMBR(path)
+	OrdenarArregloParticion()
 	if b == true {
 		for i := 0; i < len(mbr.Particiones); i++ {
 			nombreParticion := Nombres(mbr.Particiones[i].PartName)
@@ -936,6 +937,7 @@ func AgregarOQuitar(path string, add int64, name string, unidades int64) {
 				}
 				termina := mbr.Particiones[i].PartStart + mbr.Particiones[i].PartSize
 				if i < 3 {
+
 					if termina != mbr.Particiones[i+1].PartStart {
 						libre := mbr.Particiones[i+1].PartStart - termina
 						if add <= libre {
@@ -2125,6 +2127,7 @@ func AgregarDisco(path string, nombreParticion string) {
 						a1 = true
 						break
 					}
+					auxiliar = auxiliar.siguiente
 				}
 
 				if !a1 {
@@ -2133,6 +2136,8 @@ func AgregarDisco(path string, nombreParticion string) {
 					for auxiliar2.siguiente != nil {
 						auxiliar2 = auxiliar2.siguiente
 					}
+					ini := NodoDisco{}
+					auxiliar2.siguiente = &ini
 					auxiliar2.siguiente.Letra = auxiliar2.Letra + 1
 					array := strings.Split(path, "/")
 					nombre := array[len(array)-1]
@@ -2140,6 +2145,8 @@ func AgregarDisco(path string, nombreParticion string) {
 					auxiliar2.siguiente.path = path
 					//Llenar lista de particion
 					var listParticion ListaParticion
+					listInicio := NodoParticion{}
+					listParticion.inicio = &listInicio
 					listParticion.inicio.numero = 1
 					if PE {
 						listParticion.inicio.part = mbr.Particiones[i]
@@ -2155,9 +2162,9 @@ func AgregarDisco(path string, nombreParticion string) {
 						t.Hour(), t.Minute(), t.Second())
 					copy(listParticion.inicio.fecha[:], fecha)
 					copy(listParticion.inicio.name[:], nombreParticion)
-					listParticion.inicio.nombreMontada = "vd" + string(rune(auxiliar2.siguiente.Letra+1)) + "1"
-					ListDiscos.inicio.listaParticiones = listParticion
-					ListDiscos.inicio.siguiente = nil
+					listParticion.inicio.nombreMontada = "vd" + string(rune(auxiliar2.siguiente.Letra)) + "1"
+					ListDiscos.inicio.siguiente.listaParticiones = listParticion
+					//ListDiscos.inicio.siguiente = nil
 					fmt.Println(colorGreen, "**************Información**************")
 					fmt.Println(colorGreen, "Se ha montado la partición exitosamente")
 				}
@@ -3263,7 +3270,8 @@ func CrearArchivos(id string, path string, cont string, size int64, crear bool, 
 				inicio = CrearCarpeta(direccion[0], carpetas, avd, dir, 1, crear, start, super.SbAptrStartAVD)
 
 			} else {
-				inicio = buscarCarpeta(carpetas, direccion[0], avd, dir, 1, start, super.SbAptrStartAVD)
+				//	inicio = buscarCarpeta(carpetas, direccion[0], avd, dir, 1, start, super.SbAptrStartAVD)
+				inicio = CrearCarpeta(direccion[0], carpetas, avd, dir, 1, crear, start, super.SbAptrStartAVD)
 			}
 			if inicio != -1 {
 				super, b = LeerSUPERBOOT(start, dir)
